@@ -50,6 +50,26 @@ def extract_elf_section_info(elf_file):
     # Add section information to the ELF data dictionary
     elf_data.update(sections_info)
 
+def extract_elf_segment_info(elf_file):
+    # Extract segments information
+    esegments = elf_file.segments
+    segments_info = {
+        "Number of Segments": len(elf_file.segments)
+    }
+    iseg = 0
+    for segment in esegments:
+        iseg += 1
+        segments_info[f"{iseg}_segment_type"] = segment.type,
+        segments_info[f"{iseg}_segment_flags"] = segment.flags,
+        segments_info[f"{iseg}_segment_virtual_address"] = hex(segment.virtual_address),
+        segments_info[f"{iseg}_segment_physical_address"] = hex(segment.physical_address),
+        segments_info[f"{iseg}_segment_file_offset"] = hex(segment.file_offset),
+        segments_info[f"{iseg}_segment_virtual_size"] = hex(segment.virtual_size),
+        #segments_info[f"{iseg}_segment_file_size"] = segment.file_size
+
+    # Add section information to the ELF data dictionary
+    elf_data.update(segments_info)
+
 # Extract ELF dynamic entries and symbols (equivalent to imports/exports)
 def extract_elf_dynamic_info(elf):
     # Dynamic entries (imports)
@@ -83,7 +103,7 @@ def main(df_csv_path, df_pkl_path):
     # Call the extraction functions
     extract_elf_header_info(elf)
     extract_elf_section_info(elf)
-    #extract_elf_dynamic_info(elf)
+    extract_elf_segment_info(elf)
 
     # Convert the ELF data dictionary into a DataFrame
     df = pd.DataFrame([elf_data])

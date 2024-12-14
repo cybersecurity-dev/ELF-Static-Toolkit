@@ -8,21 +8,55 @@ import pandas as pd
 elf_data = {}
 
 # Extract ELF header information
-def extract_elf_header_info(elf):
+def extract_elf_header_info(elf_file):
+    # Extract ELF header information
+    eheader = elf_file.header
     header_info = {
-        "ELF Class": str(elf.header.identity_class),
-        "ELF Data": str(elf.header.identity_data),
-        "Machine Type": str(elf.header.machine_type),
-        "Entry Point": hex(elf.header.entrypoint),
-        "Number of Sections": len(elf.sections),
-        "Number of Segments": len(elf.segments),
-        "Section Header Offset": elf.header.section_header_offset,
-        "Program Header Offset": elf.header.program_header_offset,
-        "File Type": str(elf.header.file_type),
+        "File Type": str(eheader.file_type),
+        "Machine Type": str(eheader.machine_type),
+        "Entry Point": hex(eheader.entrypoint),
+        "Program Header Offset": eheader.program_header_offset,
+        "Section Header Offset": eheader.section_header_offset,
+        "Section Header Offset": eheader.section_header_offset,
+        "Program Header Offset": eheader.program_header_offset,
+        "Processor Flags": eheader.processor_flag,
+        "Header Size": eheader.header_size,
+        "Program Header Size": eheader.program_header_size,
+        "Number of Program Headers": eheader.numberof_segments,
+        "Section Header Size": eheader.section_header_size,
+        "Number of Section Headers": eheader.numberof_sections,
+        "Section Header String Table Index": eheader.section_name_table_idx,
+        "ELF Class": str(eheader.identity_class),
+        "ELF Data": str(eheader.identity_data)
     }
     
     # Add header information to the ELF data dictionary
     elf_data.update(header_info)
+
+# Extract ELF dynamic entries and symbols (equivalent to imports/exports)
+def extract_elf_dynamic_info(elf):
+    # Dynamic entries (imports)
+    dynamic_info = []
+    for dynamic_entry in elf.dynamic_entries:
+        dynamic_info.append(f"Tag: {dynamic_entry.tag}, Value: {dynamic_entry.value}")
+    
+    elf_data["Dynamic Entries"] = dynamic_info if dynamic_info else "None"
+    
+    # Exported functions (symbols)
+    exported_symbols = []
+    for symbol in elf.symbols:
+        if symbol.exported:
+            exported_symbols.append(f"Symbol: {symbol.name}, Value: {symbol.value}")
+    
+    elf_data["Exported Symbols"] = exported_symbols if exported_symbols else "None"
+    
+    # Imported functions (symbols)
+    imported_symbols = []
+    for symbol in elf.imported_symbols:
+        imported_symbols.append(f"Symbol: {symbol.name}, Value: {symbol.value}")
+    
+    elf_data["Imported Symbols"] = imported_symbols if imported_symbols else "None"
+
 
 def main(df_csv_path, df_pkl_path):
     # Load the ELF file
@@ -31,6 +65,7 @@ def main(df_csv_path, df_pkl_path):
 
     # Call the extraction functions
     extract_elf_header_info(elf)
+    extract_elf_section_info(elf)
     #extract_elf_dynamic_info(elf)
 
     # Convert the ELF data dictionary into a DataFrame
@@ -49,3 +84,8 @@ if __name__ == "__main__":
   df_pkl_path = "elf_file_information_by_column.pkl"
   main(df_csv_path, df_pkl_path)
   print(f"ELF information saved to {df_csv_path} and {df_pkl_path}")
+
+
+
+
+

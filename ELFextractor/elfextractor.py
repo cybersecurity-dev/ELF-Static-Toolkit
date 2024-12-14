@@ -33,6 +33,23 @@ def extract_elf_header_info(elf_file):
     # Add header information to the ELF data dictionary
     elf_data.update(header_info)
 
+def extract_elf_section_info(elf_file):
+    # Extract section information
+    esections = elf_file.sections
+    sections_info = {
+        "Number of Sections": len(elf_file.sections)
+    }
+    for section in esections:
+        sections_info[f"{section.name}_type"] = section.type
+        sections_info[f"{section.name}_flags"] = section.flags
+        sections_info[f"{section.name}_virtual_address"] = hex(section.virtual_address)
+        sections_info[f"{section.name}_offset"] = section.offset
+        sections_info[f"{section.name}_size"] = section.size
+        sections_info[f"{section.name}_entropy"] = section.entropy
+
+    # Add section information to the ELF data dictionary
+    elf_data.update(sections_info)
+
 # Extract ELF dynamic entries and symbols (equivalent to imports/exports)
 def extract_elf_dynamic_info(elf):
     # Dynamic entries (imports)

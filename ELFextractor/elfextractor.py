@@ -220,9 +220,9 @@ def elf_extractor_runner(binary_dir, csv_output_dir, is_malware):
     return df
 
 def main(binary_dir, csv_output_dir, is_malware):
-    eprint("----------Benign_Metadata_Extractor_From_Files.err----------START----------")
+    eprint("----------ELF_Extractor_From_Files.err----------START----------")
     elf_extractor_runner(binary_dir, csv_output_dir, is_malware)
-    eprint("----------Benign_Metadata_Extractor_From_Files.err---------- END ----------")
+    eprint("----------ELF_Extractor_From_Files.err---------- END ----------")
 
 
 if __name__ == "__main__":

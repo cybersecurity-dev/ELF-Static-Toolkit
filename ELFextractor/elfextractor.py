@@ -3,9 +3,37 @@ import os
 import os.path, time
 import lief
 import pandas as pd
+import hashlib
+from datetime import datetime
 
 # Initialize a dictionary to hold the ELF data
 elf_data = {}
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+def is_binary(fpath):
+    return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+def shannon_entropy(data):
+    # 256 different possible values
+    possible = dict(((chr(x), 0) for x in range(0, 256)))
+
+    for byte in data:
+        possible[chr(byte)] += 1
+
+    data_len = len(data)
+    entropy = 0.0
+
+    # compute
+    for i in possible:
+        if possible[i] == 0:
+            continue
+
+        p = float(possible[i] / data_len)
+        entropy -= p * math.log(p, 2)
+    return entropy
 
 # Extract ELF header information
 def extract_elf_header_info(elf_file):
@@ -70,6 +98,36 @@ def extract_elf_segment_info(elf_file):
     # Add section information to the ELF data dictionary
     elf_data.update(segments_info)
 
+
+def extract_elf_import_info(elf_file):
+    # Extract import table information
+    dynamic_entries = elf_file.dynamic_entries
+    import_info = { }
+
+    iimp = 0
+    for entry in dynamic_entries:
+        if entry.tag == 1:
+            iimp += 1
+            import_info[f"{iimp}_import_name"] = entry.name
+
+    # Add section information to the ELF data dictionary
+    elf_data.update(import_info)
+
+def extract_elf_export_info(elf_file):
+    # Extract export table information
+    exported_symbols = elf_file.exported_symbols
+    export_info = { }
+
+    iexp = 0
+    for symbol in exported_symbols:
+        iexp += 1
+        export_info[f"{iexp}_export_name"] = symbol.name
+
+    # Add section information to the ELF data dictionary
+    elf_data.update(export_info)
+
+
+
 # Extract ELF dynamic entries and symbols (equivalent to imports/exports)
 def extract_elf_dynamic_info(elf):
     # Dynamic entries (imports)
@@ -95,34 +153,92 @@ def extract_elf_dynamic_info(elf):
     elf_data["Imported Symbols"] = imported_symbols if imported_symbols else "None"
 
 
-def main(df_csv_path, df_pkl_path):
-    # Load the ELF file
-    elf_file_path = "./elf/SlackSetup.elf"  # Replace with your ELF file path
-    elf = lief.parse(elf_file_path)
+def elf_extractor_runner(binary_dir, csv_output_dir, is_malware):
+    global elf_data
 
-    # Call the extraction functions
-    extract_elf_header_info(elf)
-    extract_elf_section_info(elf)
-    extract_elf_segment_info(elf)
+    # hash_list = []
+    indx = 0
+    df = pd.DataFrame()
+    extensions = ("elf")
 
-    # Convert the ELF data dictionary into a DataFrame
-    df = pd.DataFrame([elf_data])
+    for r, d, f in os.walk(binary_dir):
+        for filename in f:
+            if not filename.endswith(extensions):
+                eprint("this file is not executable: ", filename)
+                continue
+            else:
+                df_header  = pd.DataFrame()
+                df_section = pd.DataFrame()
+                df_segment = pd.DataFrame()
+                df_import  = pd.DataFrame()
+                df_export  = pd.DataFrame()
 
-    # Save DataFrame as CSV
-    df.to_csv(df_csv_path, index=False)
+                full_file_path = os.path.join(r, filename)
+                sha256_hash = hashlib.sha256()
+                with open(full_file_path, "rb") as f:
+                    # Read and update hash string value in blocks of 4K
+                    for byte_block in iter(lambda: f.read(4096), b""):
+                        sha256_hash.update(byte_block)
+                filename = sha256_hash.hexdigest()
+                df.at[indx, 'sha256_hash'] = filename
+                print("-------------------------------------------------------------------")
+                now = datetime.now()
+                date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
+                print("File operation started at: ", date_time)
+                print("Next hash file::", df.at[indx, 'sha256_hash'])
+                print("Full_file_path::", full_file_path)
+                print("-------------------------------------------------------------------")
+                if indx % 100 == 0:
+                    print("Hundred Element Count:", indx)
+                
+                elf_data = {}
 
-    # Save DataFrame as pickle (.pkl)
-    df.to_pickle(df_pkl_path)
+                elf = lief.parse(full_file_path)
+
+                # Call the extraction functions
+                extract_elf_header_info(elf)
+                #extract_elf_section_info(elf)
+                #extract_elf_segment_info(elf)
+                #extract_elf_import_info(elf)
+                #extract_elf_export_info(elf)
+
+                # Convert the ELF data dictionary into a DataFrame
+                df = pd.DataFrame([elf_data])
+                df_csv_path = f"{csv_output_dir}/{filename}.csv"
+                df_pkl_path = f"{csv_output_dir}/{filename}.pkl"             
+
+                # Save DataFrame as CSV
+                df.to_csv(df_csv_path, index=False)
+                print(f"{filename} information saved into csv:\n{df_csv_path}")
+                
+                # Save DataFrame as pickle (.pkl)
+                df.to_pickle(df_pkl_path)
+                print(f"{filename} information saved into pkl:\n{df_pkl_path}")
+
+                df.at[indx, 'label'] = int(1) if is_malware else int(0)
+                indx = indx + 1
+    return df
+
+def main(binary_dir, csv_output_dir, is_malware):
+    eprint("----------Benign_Metadata_Extractor_From_Files.err----------START----------")
+    elf_extractor_runner(binary_dir, csv_output_dir, is_malware)
+    eprint("----------Benign_Metadata_Extractor_From_Files.err---------- END ----------")
+
 
 if __name__ == "__main__":
-  print("[" + __file__ + "]'s last modified: %s" % time.ctime(os.path.getmtime(__file__)))
-  # Save the DataFrame to a CSV file and pickle file
-  df_csv_path = "elf_file_information_by_column.csv"
-  df_pkl_path = "elf_file_information_by_column.pkl"
-  main(df_csv_path, df_pkl_path)
-  print(f"ELF information saved to {df_csv_path} and {df_pkl_path}")
+    print("[" + __file__ + "]'s last modified: %s" % time.ctime(os.path.getmtime(__file__)))
+    # Check if a parameter is provided
+    if len(sys.argv) == 3:
+        in_dir = sys.argv[1]
+        if not os.path.exists(in_dir):
+            print(f"Directory: '{in_dir}' does not exist.")
+            exit()
+        print(f"\n\nBinary Directory:\t\t{in_dir}")
 
-
-
-
-
+        out_dir = sys.argv[2]
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir, exist_ok=True)
+        print(f"CSV Files will save:\t{out_dir}")
+        main(in_dir, out_dir, False)
+    else:
+        print("No input directory and output directory provided.")

@@ -64,6 +64,7 @@ def extract_elf_header_info(elf_file):
     # Add header information to the ELF data dictionary
     elf_data.update(header_info)
 
+#Section Headers
 def extract_elf_section_info(elf_file):
     # Extract section information
     esections = elf_file.sections
@@ -71,36 +72,59 @@ def extract_elf_section_info(elf_file):
         "Number of Sections": len(elf_file.sections)
     }
     for section in esections:
-        sections_info[f"{section.name}_type"] = section.type
-        sections_info[f"{section.name}_flags"] = section.flags
+        #if section.type == "NULL":
+        #    continue
+        sections_info[f"{section.name}_type"] = section.type.name if section.type else "UNKNOWN"
+        sections_info[f"{section.name}_flags"] = str(section.flags),  # Flags as bit field
         sections_info[f"{section.name}_virtual_address"] = hex(section.virtual_address)
-        sections_info[f"{section.name}_offset"] = section.offset
-        sections_info[f"{section.name}_size"] = section.size
+        sections_info[f"{section.name}_offset"] = hex(section.offset),
+        sections_info[f"{section.name}_size"] = hex(section.size),
+        sections_info[f"{section.name}_entry_size"] = section.entry_size,
+        sections_info[f"{section.name}_alignment"] = section.alignment,
+        sections_info[f"{section.name}_link"] = section.link,
+        sections_info[f"{section.name}_information"] = section.information,
+        sections_info[f"{section.name}_content"] = str(section.content[:10]),  # First 10 bytes of raw data
         sections_info[f"{section.name}_entropy"] = section.entropy
 
     # Add section information to the ELF data dictionary
     elf_data.update(sections_info)
 
+#Program Headers/Segment
 def extract_elf_segment_info(elf_file):
     # Extract segments information
     esegments = elf_file.segments
     segments_info = {
         "Number of Segments": len(elf_file.segments)
     }
-    iseg = 0
     for segment in esegments:
-        iseg += 1
-        segments_info[f"{iseg}_segment_type"] = segment.type,
-        segments_info[f"{iseg}_segment_flags"] = segment.flags,
-        segments_info[f"{iseg}_segment_virtual_address"] = hex(segment.virtual_address),
-        segments_info[f"{iseg}_segment_physical_address"] = hex(segment.physical_address),
-        segments_info[f"{iseg}_segment_file_offset"] = hex(segment.file_offset),
-        segments_info[f"{iseg}_segment_virtual_size"] = hex(segment.virtual_size),
-        #segments_info[f"{iseg}_segment_file_size"] = segment.file_size
+        Program_Headers_Type = segment.type.name if segment.type else "UNKNOWN"
+        segments_info[f"{Program_Headers_Type}_segment_offset"] = hex(segment.file_offset)
+        segments_info[f"{Program_Headers_Type}_segment_virtual_address"] = hex(segment.virtual_address)
+        segments_info[f"{Program_Headers_Type}_segment_physical_address"] = hex(segment.physical_address)
+        segments_info[f"{Program_Headers_Type}_segment_file_size"] = segment.physical_size
+        segments_info[f"{Program_Headers_Type}_segment_memory_size"] = segment.virtual_size
+        segments_info[f"{Program_Headers_Type}_segment_flags"] = str(segment.flags.name)
+        segments_info[f"{Program_Headers_Type}_segment_alignment"] = segment.alignment
 
     # Add section information to the ELF data dictionary
     elf_data.update(segments_info)
+ 
 
+# Extract segment-to-section mapping
+def extract_segment_to_section_mapping(elf_file):
+    esegments = elf_file.segments
+    esections = elf_file.sections
+    segment_to_section_mapping_data = {}
+    for segment_idx, segment in enumerate(esegments):
+        sections_in_segment = []
+        for section in esections:
+            # Check if the section falls within the segment's range
+            if segment.file_offset <= section.offset < segment.file_offset + segment.physical_size:
+                if section.name != "":
+                    segment_to_section_mapping_data[f"section_to_segment_mapping_{segment_idx}_{section.name}_"] = 1
+                    #sections_in_segment.append(section.name)
+    df_segment_to_section_mapping_data = pd.DataFrame(segment_to_section_mapping_data, index=[0])
+    print(df_segment_to_section_mapping_data)
 
 def extract_elf_import_info(elf_file):
     # Extract import table information
@@ -128,7 +152,6 @@ def extract_elf_export_info(elf_file):
 
     # Add section information to the ELF data dictionary
     elf_data.update(export_info)
-
 
 
 # Extract ELF dynamic entries and symbols (equivalent to imports/exports)

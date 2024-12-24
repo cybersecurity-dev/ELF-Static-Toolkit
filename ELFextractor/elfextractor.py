@@ -10,6 +10,7 @@ import math
 
 # Initialize a dictionary to hold the ELF data
 elf_data = {}
+initflag = True
 
 def clear_log_file(log_file_path):
     try:
@@ -41,7 +42,7 @@ def eprint_with_timestamp(*args, **kwargs):
     except Exception as e:
         print(f"Error writing to log file: {e}", file=sys.stderr)
 
-initflag = True
+
 def eprint(*args, **kwargs):
     global initflag
     LOG_FILE = os.path.basename(__file__).split('.')[0] + "_err.log"
@@ -122,6 +123,40 @@ def shannon_entropy(data: bytes) -> float:
             p = count / len(data)
             entropy -= p * math.log2(p)
     return entropy
+
+
+def get_abi_version(elf):
+    """Extracts the Build ID from an ELF binary using LIEF."""
+    for note in elf.notes:
+        if note.name == "GNU" and note.type == lief.ELF.NOTE_TYPES.ABI_TAG:
+            abi_version = (note.description[4], note.description[8], note.description[12])
+            note_owner = note.name
+            note_abi_version = '.'.join(map(str, abi_version[:3]))
+            return note_owner, note_abi_version
+    return None, None
+
+def get_build_id(elf):
+    """Extracts the ABI tag from an ELF binary using LIEF."""
+    for note in elf.notes:
+        if  note.name == "GNU" and note.type == lief.ELF.NOTE_TYPES.BUILD_ID:
+            note_build_id = ''.join(f"{byte:02x}" for byte in note.description) if note.description else "None"
+            #note_build_id = note.description.hex()
+            note_owner = note.name
+            return note_owner, note_build_id
+    return None, None
+
+def extract_elf_file_notes_info(elf):
+    owner = None
+    build_id = None
+    abi_version = None
+    try:
+        owner, build_id = get_build_id(elf)
+        owner, abi_version = get_abi_version(elf)
+    except lief.exception as lief_error:
+        eprint(f"LIEF Error: {lief_error}")
+    except Exception as e:
+        eprint(f"An unexpected error occurred: {e}")
+    return owner, build_id, abi_version
 
 # Extract ELF header information ##Checked: readelf  --file-header sample.elf
 def extract_elf_file_header_info(elf_file):
@@ -361,7 +396,7 @@ def elf_extractor_runner(binary_dir, csv_output_dir, is_malware):
                 elf = lief.parse(full_file_path)
 
                 # Call the extraction functions
-                extract_elf_header_info(elf)
+                #extract_elf_header_info(elf)
                 #extract_elf_section_info(elf)
                 #extract_elf_segment_info(elf)
                 #extract_segment_to_section_mapping(elf)
@@ -369,7 +404,7 @@ def elf_extractor_runner(binary_dir, csv_output_dir, is_malware):
                 #extract_elf_export_info(elf)
                 #extract_elf_dynamic_info(elf)
                 #extract_elf_shared_lib_info(elf)
-                
+                elf_notes_owner, elf_notes_build_id, elf_notes_abi_version = extract_elf_file_notes_info(elf)
 
 
                 # Convert the ELF data dictionary into a DataFrame

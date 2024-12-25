@@ -8,8 +8,7 @@ import datetime
 import subprocess
 import math
 
-# Initialize a dictionary to hold the ELF data
-elf_data = {}
+
 initflag = True
 
 def clear_log_file(log_file_path):
@@ -41,7 +40,6 @@ def eprint_with_timestamp(*args, **kwargs):
             f.write(message)
     except Exception as e:
         print(f"Error writing to log file: {e}", file=sys.stderr)
-
 
 def eprint(*args, **kwargs):
     global initflag
@@ -124,11 +122,23 @@ def shannon_entropy(data: bytes) -> float:
             entropy -= p * math.log2(p)
     return entropy
 
+# Function to extract information from the version requirement section ##Checked readelf --version-info  sample.elf
+def extract_elf_file_version_needs(elf_file) -> dict:
+    # Extract version needs section information
+    version_needs_info = {}
+    for version_need in elf_file.symbols_version_requirement:
+        for aux_idx, aux in enumerate(version_need.get_auxiliary_symbols()):
+            version_needs_info[f"{aux_idx}_version_{version_need.version}_needs_{version_need.name}_name"] = aux.name
+            version_needs_info[f"{aux_idx}_version_{version_need.version}_needs_{version_need.name}_flag"] = aux.flags
+            version_needs_info[f"{aux_idx}_version_{version_need.version}_needs_{version_need.name}_version"] = aux.other    
+    #elf_data.update(version_needs_info)
+    return version_needs_info
 
 def get_abi_version(elf):
     """Extracts the Build ID from an ELF binary using LIEF."""
     for note in elf.notes:
-        if note.name == "GNU" and note.type == lief.ELF.NOTE_TYPES.ABI_TAG:
+        #if note.name == "GNU" and note.type == lief.ELF.NOTE_TYPES.ABI_TAG:
+        if note.name == "GNU" and note.type == 1:
             abi_version = (note.description[4], note.description[8], note.description[12])
             note_owner = note.name
             note_abi_version = '.'.join(map(str, abi_version[:3]))
@@ -138,7 +148,8 @@ def get_abi_version(elf):
 def get_build_id(elf):
     """Extracts the ABI tag from an ELF binary using LIEF."""
     for note in elf.notes:
-        if  note.name == "GNU" and note.type == lief.ELF.NOTE_TYPES.BUILD_ID:
+        #if  note.name == "GNU" and note.type == lief.ELF.NOTE_TYPES.GNU_BUILD_ID:
+        if  note.name == "GNU" and note.type == 3:
             note_build_id = ''.join(f"{byte:02x}" for byte in note.description) if note.description else "None"
             #note_build_id = note.description.hex()
             note_owner = note.name
@@ -159,7 +170,7 @@ def extract_elf_file_notes_info(elf):
     return owner, build_id, abi_version
 
 # Extract ELF header information ##Checked: readelf  --file-header sample.elf
-def extract_elf_file_header_info(elf_file):
+def extract_elf_file_header_info(elf_file) -> dict:
     # Extract ELF header information
     eheader = elf_file.header
     header_info = {
@@ -185,11 +196,12 @@ def extract_elf_file_header_info(elf_file):
         "Section header string table index": eheader.section_name_table_idx        
     }
     # Add header information to the ELF data dictionary
-    print(header_info)
-    elf_data.update(header_info)
+    #print(header_info)
+    #elf_data.update(header_info)
+    return header_info
 
 #Section Headers  ##Checked  readelf --section-headers sample.elf
-def extract_elf_section_headers_info(elf_file):
+def extract_elf_section_headers_info(elf_file) -> dict:
     # Extract section information
     esections = elf_file.sections
     sections_info = {
@@ -213,14 +225,13 @@ def extract_elf_section_headers_info(elf_file):
         sections_info[f"{section.name}_content"] = ' '.join([f'{byte:02x}' for byte in section_content[:15]])
         sections_info[f"{section.name}_shannon_entropy"] = shannon_entropy(section_content)
 
-    #print(sections_info)
-    for key, value in sections_info.items():
-        print(key, value)
+    #for key, value in sections_info.items():
+    #    print(key, value)
     # Add section information to the ELF data dictionary
-    elf_data.update(sections_info)
+    return sections_info
 
 #Program Headers/Segment ##Checked  readelf --program-headers sample.elf
-def extract_elf_program_headers_info(elf_file):
+def extract_elf_program_headers_info(elf_file) -> dict:
     # Extract segments information
     esegments = elf_file.segments
     segments_info = {
@@ -237,28 +248,34 @@ def extract_elf_program_headers_info(elf_file):
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_memory_size"] = hex(segment.virtual_size)
         #segments_info[f"{Program_Headers_Type}_segment_flags"] = segment.flags.name
         flags = []
-        if segment.has(lief.ELF.SEGMENT_FLAGS.R):
+        # Define constants for segment flags
+        PF_R = 0x4  # Readable
+        PF_W = 0x2  # Writable
+        PF_X = 0x1  # Executable
+
+        if int(segment.flags) & PF_R:
             flags.append("R")
-        if segment.has(lief.ELF.SEGMENT_FLAGS.W):
+        if int(segment.flags) & PF_W:
             flags.append("W")
-        if segment.has(lief.ELF.SEGMENT_FLAGS.X):
+        if int(segment.flags) & PF_X:
             flags.append("E")
             segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_is_executable"] = True
         else:
             segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_is_executable"] = False
+        
+        #lief.ELF.SECTION_FLAGS.WRITE
+        #if segment.has(lief.ELF.SEGMENT_FLAGS.R)
+
         flags_str = "".join(flags)
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_flags"] = flags_str
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_alignment"] = segment.alignment
         segment_content = bytes(segment.content)
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_content"] = ' '.join([f'{byte:02x}' for byte in segment_content[:15]])
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_shannon_entropy"] = shannon_entropy(segment_content)
-    for key, value in segments_info.items():
-        print(key, value)
-    # Add section information to the ELF data dictionary
-    elf_data.update(segments_info)
+    return segments_info
  
 # Extract segment-to-section mapping ##Checked  readelf --program-headers sample.elf
-def extract_segment_to_section_mapping(elf_file):
+def extract_segment_to_section_mapping(elf_file) -> dict:
     esegments = elf_file.segments
     esections = elf_file.sections
     segment_to_section_mapping_data = {}
@@ -269,14 +286,28 @@ def extract_segment_to_section_mapping(elf_file):
             if segment.file_offset <= section.offset < segment.file_offset + segment.physical_size:
                 if section.name != "":
                     segment_to_section_mapping_data[f"section_to_segment_mapping_segment{segment_idx}_{section.name}_"] = 1
-                    #sections_in_segment.append(section.name)
-    
-    for key, value in segment_to_section_mapping_data.items():
-        print(key, value)
-    #df_segment_to_section_mapping_data = pd.DataFrame(segment_to_section_mapping_data, index=[0])
-    elf_data.update(segment_to_section_mapping_data)
+                    #sections_in_segment.append(section.name)   
+    return segment_to_section_mapping_data
 
-def extract_elf_export_info(elf_file):
+def extract_elf_import_info(elf_file) -> dict:
+    # Extract import table information
+    dynamic_entries = elf_file.dynamic_entries
+    import_info = { }
+
+    iimp = 0
+    for entry in dynamic_entries:
+        if entry.tag == 1:
+            iimp += 1
+            import_info[f"{iimp}_import_name"] = entry.name
+    
+    for key, value in import_info.items():
+        print(key, value)
+    
+    # Add section information to the ELF data dictionary
+    # elf_data.update(import_info)
+    return import_info
+
+def extract_elf_export_info(elf_file) -> dict:
     # Extract export table information
     exported_symbols = elf_file.exported_symbols
     export_info = { }
@@ -287,7 +318,8 @@ def extract_elf_export_info(elf_file):
         export_info[f"{iexp}_export_name"] = symbol.name
 
     # Add section information to the ELF data dictionary
-    elf_data.update(export_info)
+    # elf_data.update(export_info)
+    return export_info
 
 def extract_elf_shared_lib_info(elf_file):
     # Extract shared libraries from the dynamic section
@@ -394,18 +426,23 @@ def elf_extractor_runner(binary_dir, csv_output_dir, is_malware):
                 elf_data = {}
 
                 elf = lief.parse(full_file_path)
+                # Initialize a dictionary to hold the ELF data
+                elf_parse_result = {}
 
                 # Call the extraction functions
-                #extract_elf_header_info(elf)
-                #extract_elf_section_info(elf)
-                #extract_elf_segment_info(elf)
-                #extract_segment_to_section_mapping(elf)
-                #extract_elf_import_info(elf)
-                #extract_elf_export_info(elf)
-                #extract_elf_dynamic_info(elf)
-                #extract_elf_shared_lib_info(elf)
-                elf_notes_owner, elf_notes_build_id, elf_notes_abi_version = extract_elf_file_notes_info(elf)
+                elf_parse_result.update(extract_elf_file_header_info(elf))
+                elf_parse_result.update(extract_elf_section_headers_info(elf))
+                elf_parse_result.update(extract_elf_program_headers_info(elf))
+                elf_parse_result.update(extract_segment_to_section_mapping(elf))
+                elf_parse_result.update(extract_elf_import_info(elf))
+                elf_parse_result.update(extract_elf_export_info(elf))
+                #elf_parse_result.update(extract_elf_dynamic_info(elf))
+                #elf_parse_result.update(extract_elf_shared_lib_info(elf))
+                elf_parse_result.update(extract_elf_file_version_needs(elf))
 
+
+                elf_notes_owner, elf_notes_build_id, elf_notes_abi_version = extract_elf_file_notes_info(elf)
+                print(f"ABI verison:{elf_notes_abi_version}\nBuild ID:{elf_notes_build_id}\nOwner:{elf_notes_owner}")
 
                 # Convert the ELF data dictionary into a DataFrame
                 df = pd.DataFrame([elf_data])

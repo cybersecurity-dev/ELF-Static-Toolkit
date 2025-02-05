@@ -7,17 +7,35 @@ import hashlib
 import datetime
 import subprocess
 import math
-
+import ssdeep
+import csv
 
 initflag = True
 
-def clear_log_file(log_file_path):
+def calculate_sha256(file_path):
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+def is_elf_file(filepath) -> bool:
+    """
+    Checks ELF file by inspecting its magic bytes.
+    """
+    with open(filepath, 'rb') as f:
+        magic_bytes = f.read(4)
+        return magic_bytes == b'\x7fELF'
+    
+def clear_log_file(log_file_path) -> bool:
     try:
         with open(log_file_path, "w"):  # Open in write mode, which truncates the file
             pass  # No need to write anything
         print(f"Log file '{log_file_path}' cleared.")
+        return True
     except Exception as e:
         print(f"Error clearing log file: {e}")
+    return False
 
 def eprint_with_timestamp(*args, **kwargs):
     LOG_FILE = os.path.basename(__file__).split('.')[0] + "_err.log"
@@ -59,6 +77,84 @@ def eprint(*args, **kwargs):
 def is_binary(fpath):
     return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
+def get_number_of_sections(fpath):
+    try:
+        binary = lief.parse(fpath)
+    except Exception as e:
+        raise Exception(f"Failed to parse the binary: {str(e)}")
+    return len(binary.sections)
+
+def get_number_of_program_headers(fpath):
+    try:
+        binary = lief.parse(fpath)
+    except Exception as e:
+        raise Exception(f"Failed to parse the binary: {str(e)}")
+    return len(binary.segments)
+
+def detect_architecture(fpath):
+    binary = lief.parse(fpath)
+    if binary is None:
+        print(f"File is not Binary:{fpath}\n")
+        raise Exception("Failed to parse the binary.")
+
+    machine_type = binary.header.machine_type
+    
+    if machine_type == lief.ELF.ARCH.ARM:
+        return "ARM (32-bit)"
+    elif machine_type == lief.ELF.ARCH.AARCH64:
+        return "ARM64"
+    elif machine_type == lief.ELF.ARCH.MIPS:
+        return "MIPS"
+    elif machine_type == lief.ELF.ARCH.I386:
+        return "Intel 80386"
+    elif machine_type == lief.ELF.ARCH.X86_64:
+        return "Intel x86-64"
+    elif machine_type == lief.ELF.ARCH.PPC64:
+        return "PowerPC64"
+    elif machine_type == lief.ELF.ARCH.RISCV:
+        return "RISC-V"
+    elif machine_type == lief.ELF.ARCH.IA_64:
+        return "IA-64 (Itanium)"
+    else:
+        return f"Unknown ELF architecture ({machine_type})"
+
+def has_unsupported_unwind_sections(fpath):
+    """Check if an ELF binary contains unwind sections for Intel 80386 (x86) architecture."""
+    try:
+        binary = lief.parse(fpath)
+    except Exception as e:
+        raise ValueError(f"Failed to parse file: {str(e)}")
+
+    if not isinstance(binary, lief.ELF.Binary):
+        return False  # Not an ELF binary
+
+    # Check for Intel 80386 architecture
+    if binary.header.machine_type != lief.ELF.ARCH.i386:
+        return False  # Not x86
+
+    # List of unwind-related sections to check
+    unwind_sections = {
+        '.eh_frame',      # Exception handling frame section
+        '.eh_frame_hdr',  # Exception handling frame header
+        '.debug_frame'    # Debug frame section
+    }
+
+    # Check if any unwind sections exist
+    found_sections = []
+    for section in binary.sections:
+        if section.name in unwind_sections:
+            found_sections.append(section.name)
+    
+    return len(found_sections) > 0
+
+def get_elf_file_type(fpath):
+    """Gets the ELF file type of an ELF file."""
+    binary = lief.parse(fpath)
+    if binary is None:
+        raise Exception(f"Failed to parse:{fpath}")
+        return None
+    return binary.header.file_type.name
+
 def get_elf_type(fpath):
     try:
         # Use the 'file' command to get file type information
@@ -86,14 +182,13 @@ def get_elf_type(fpath):
         print(f"An unexpected error occurred: {e}")
         return None
 
-def get_segment_flags(segment):
-    flags = segment.flags.name
+def get_segment_flags(flags):
     readable = False
     writable = False
     executable = False
 
     if isinstance(flags, str):  # LIEF sometimes returns strings
-        readable = "R" in flags
+        readable = "R" in flags 
         writable = "W" in flags
         executable = "E" in flags
     elif isinstance(flags, int):  # Sometimes it returns integers (raw flags)
@@ -156,7 +251,7 @@ def get_build_id(elf):
             return note_owner, note_build_id
     return None, None
 
-def extract_elf_file_notes_info(elf):
+def extract_elf_file_notes_info(elf) -> dict:
     owner = None
     build_id = None
     abi_version = None
@@ -167,7 +262,7 @@ def extract_elf_file_notes_info(elf):
         eprint(f"LIEF Error: {lief_error}")
     except Exception as e:
         eprint(f"An unexpected error occurred: {e}")
-    return owner, build_id, abi_version
+    return {"owner" : owner, "build_id" : build_id, "abi_version" : abi_version}
 
 # Extract ELF header information ##Checked: readelf  --file-header sample.elf
 def extract_elf_file_header_info(elf_file) -> dict:
@@ -224,10 +319,17 @@ def extract_elf_section_headers_info(elf_file) -> dict:
         section_content = bytes(section.content)  # Ensure content is bytes
         sections_info[f"{section.name}_content"] = ' '.join([f'{byte:02x}' for byte in section_content[:15]])
         sections_info[f"{section.name}_shannon_entropy"] = shannon_entropy(section_content)
+        try:
+            sections_info[f"{section.name}_ssdeep_hash"] = ssdeep.hash(section_content)
+            #print(ssdeep.hash(section_content))
+        except Exception as e:
+            print(f"Error calculating ssdeep for section {section.type}: {e}")
+            sections_info[f"{section.name}_ssdeep_hash"] = "Error" # Or some other indicator
 
     #for key, value in sections_info.items():
     #    print(key, value)
     # Add section information to the ELF data dictionary
+    #print(sections_info)
     return sections_info
 
 #Program Headers/Segment ##Checked  readelf --program-headers sample.elf
@@ -246,7 +348,13 @@ def extract_elf_program_headers_info(elf_file) -> dict:
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_physical_address"] = hex(segment.physical_address)
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_file_size"] = hex(segment.physical_size)
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_memory_size"] = hex(segment.virtual_size)
-        #segments_info[f"{Program_Headers_Type}_segment_flags"] = segment.flags.name
+        is_read, is_write, is_exec = get_segment_flags(segment.flags.name)
+        segments_info[f"{Program_Headers_Type}_segment_flags_READ"] = is_read
+        segments_info[f"{Program_Headers_Type}_segment_flags_WRITE"] = is_write
+        segments_info[f"{Program_Headers_Type}_segment_flags_EXECUTE"] = is_exec
+        #print(f"----->{get_segment_flags(segment.flags.name)}")
+        
+        
         flags = []
         # Define constants for segment flags
         PF_R = 0x4  # Readable
@@ -262,16 +370,26 @@ def extract_elf_program_headers_info(elf_file) -> dict:
             segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_is_executable"] = True
         else:
             segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_is_executable"] = False
-        
-        #lief.ELF.SECTION_FLAGS.WRITE
-        #if segment.has(lief.ELF.SEGMENT_FLAGS.R)
-
+     
         flags_str = "".join(flags)
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_flags"] = flags_str
+
+
+
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_alignment"] = segment.alignment
         segment_content = bytes(segment.content)
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_content"] = ' '.join([f'{byte:02x}' for byte in segment_content[:15]])
         segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_shannon_entropy"] = shannon_entropy(segment_content)
+        try:
+            segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_ssdeep_hash"] = ssdeep.hash(segment_content)
+            #print(ssdeep.hash(segment_content))
+        except Exception as e:
+            print(f"Error calculating ssdeep for segment {Program_Headers_Type}: {e}")
+            segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_ssdeep_hash"] = "Error" # Or some other indicator
+    #for key, value in segments_info.items():
+    #    print(key, value)
+    # Add section information to the ELF data dictionary
+    #print(segments_info)
     return segments_info
  
 # Extract segment-to-section mapping ##Checked  readelf --program-headers sample.elf
@@ -287,6 +405,10 @@ def extract_segment_to_section_mapping(elf_file) -> dict:
                 if section.name != "":
                     segment_to_section_mapping_data[f"section_to_segment_mapping_segment{segment_idx}_{section.name}_"] = 1
                     #sections_in_segment.append(section.name)   
+    #for key, value in segment_to_section_mapping_data.items():
+    #    print(key, value)
+    # Add section information to the ELF data dictionary
+    #print(segment_to_section_mapping_data)
     return segment_to_section_mapping_data
 
 def extract_elf_import_info(elf_file) -> dict:
@@ -298,13 +420,12 @@ def extract_elf_import_info(elf_file) -> dict:
     for entry in dynamic_entries:
         if entry.tag == 1:
             iimp += 1
-            import_info[f"{iimp}_import_name"] = entry.name
-    
-    for key, value in import_info.items():
-        print(key, value)
-    
+            #import_info[f"{iimp}_import_name"] = entry.name
+            import_info[f"{entry.name}"] = 1
+    #for key, value in import_info.items():
+    #    print(key, value)
     # Add section information to the ELF data dictionary
-    # elf_data.update(import_info)
+    #print(import_info)
     return import_info
 
 def extract_elf_export_info(elf_file) -> dict:
@@ -315,155 +436,129 @@ def extract_elf_export_info(elf_file) -> dict:
     iexp = 0
     for symbol in exported_symbols:
         iexp += 1
-        export_info[f"{iexp}_export_name"] = symbol.name
-
+        #export_info[f"{iexp}_export_name"] = symbol.name
+        export_info[f"{symbol.name}"] = 1
+    
+    #for key, value in export_info.items():
+    #    print(key, value)
     # Add section information to the ELF data dictionary
     # elf_data.update(export_info)
     return export_info
 
-def extract_elf_shared_lib_info(elf_file):
+def extract_elf_shared_lib_info(elf_file) -> dict:
     # Extract shared libraries from the dynamic section
-    shared_libraries = []
+    shared_libraries = {}
     eentry = elf_file.dynamic_entries
     for entry in eentry:
-        #if entry.tag == lief.ELF.DYNAMIC_TAG.NEEDED:  # Only needed shared libraries
+        #if entry.tag == lief.ELF.DYNAMIC_TAG.NEEDED:  # Only needed shared libraries    
         if entry.tag.name == "NEEDED":  # Tag 1 corresponds to NEEDED
-            shared_libraries.append({
-                "Tag": str(entry.tag.name),  # Dynamic tag type
-                "Type": "NEEDED",
-                "Shared Library": entry.name
-            })
-    df_shared_libraries = pd.DataFrame(shared_libraries)
-    print(df_shared_libraries)
+            shared_libraries[f"{entry.name}_Tag"] = str(entry.tag.name),  # Dynamic tag type
+            #shared_libraries[f"{entry.name}_Type"] = str(entry.tag.)
+    #for key, value in shared_libraries.items():
+    #    print(key, value)
+    #print(shared_libraries)
+    return shared_libraries
 
 # Extract ELF dynamic entries and symbols (equivalent to imports/exports)
-def extract_elf_dynamic_info(elf_file):
+def extract_elf_dynamic_info(elf_file) -> dict:
    # Extract dynamic symbols (used for runtime imports)
-    dynamic_symbols = []
+    dynamic_symbols = {}
     for symbol in elf_file.dynamic_symbols:
-        dynamic_symbols.append({
-            "Name": symbol.name,
-            "Value": hex(symbol.value),
-            "Size": symbol.size,
-            "Type": symbol.type.name if symbol.type else "UNKNOWN",
-            "Binding": symbol.binding.name if symbol.binding else "UNKNOWN",
-            "Visibility": symbol.visibility.name if symbol.visibility else "UNKNOWN",
-            "Ndx": str(symbol.shndx)  # Section index (Ndx) field
-        })
+        dynamic_symbols[f"{symbol.name}_Value"] = hex(symbol.value)
+        dynamic_symbols[f"{symbol.name}_Size"] = symbol.size
+        dynamic_symbols[f"{symbol.name}_Type"] = symbol.type.name if symbol.type else "UNKNOWN",
+        dynamic_symbols[f"{symbol.name}_Binding"] = symbol.binding.name if symbol.binding else "UNKNOWN",
+        dynamic_symbols[f"{symbol.name}_Visibility"] = symbol.visibility.name if symbol.visibility else "UNKNOWN",
+        dynamic_symbols[f"{symbol.name}_Ndx"] = str(symbol.shndx)  # Section index (Ndx) field
 
-    df_dynamic_symbols = pd.DataFrame(dynamic_symbols)
-    print(df_dynamic_symbols)
-
-# Extract ELF dynamic entries and symbols (equivalent to imports/exports)
-def extract_elf_dynamic_info2(elf):
-    # Extract dynamic symbols (used for runtime imports)
-    dynamic_info = []
-    for dynamic_entry in elf.dynamic_entries:
-        dynamic_info.append(f"Tag: {dynamic_entry.tag}, Value: {dynamic_entry.value}")
-    
-    elf_data["Dynamic Entries"] = dynamic_info if dynamic_info else "None"
-    
-    # Exported functions (symbols)
-    exported_symbols = []
-    for symbol in elf.symbols:
-        if symbol.exported:
-            exported_symbols.append(f"Symbol: {symbol.name}, Value: {symbol.value}")
-    
-    elf_data["Exported Symbols"] = exported_symbols if exported_symbols else "None"
-    
-    # Imported functions (symbols)
-    imported_symbols = []
-    for symbol in elf.imported_symbols:
-        imported_symbols.append(f"Symbol: {symbol.name}, Value: {symbol.value}")
-    
-    elf_data["Imported Symbols"] = imported_symbols if imported_symbols else "None"
-
+    #for key, value in dynamic_symbols.items():
+    #    print(key, value)
+    #print(dynamic_symbols)
+    return dynamic_symbols
 
 def elf_extractor_runner(binary_dir, csv_output_dir, is_malware):
-    global elf_data
-
     # hash_list = []
     indx = 0
     df = pd.DataFrame()
-    extensions = ("elf")
-
+    
     for r, d, f in os.walk(binary_dir):
         for filename in f:
-            #if not filename.endswith(extensions):
-                #eprint("this file is not executable: ", filename)
-                #continue
             full_file_path = os.path.join(r, filename)
-            elf_type = get_elf_type(full_file_path)
-            if elf_type != "ET_EXEC":
-                eprint(f"File path:{full_file_path}\nELF Type:{elf_type}")
+
+            if not is_elf_file(full_file_path):
+                eprint(f"File path:{full_file_path}\tis not ELF")
+                continue
+            if detect_architecture(full_file_path) not in ("Intel 80386", "Intel x86-64"):
+                print(f"ELF is not Intel Architecture:{full_file_path}")
+                continue
+            if has_unsupported_unwind_sections(full_file_path):
+                print(f"{full_file_path} is an x86 ELF with potential unsupported unwind sections")
                 continue
             else:
-                print(f"File path:{full_file_path}\nELF Type:{elf_type}")
                 df_header  = pd.DataFrame()
                 df_section = pd.DataFrame()
                 df_segment = pd.DataFrame()
                 df_import  = pd.DataFrame()
                 df_export  = pd.DataFrame()
-                
-                sha256_hash = hashlib.sha256()
-                with open(full_file_path, "rb") as f:
-                    # Read and update hash string value in blocks of 4K
-                    for byte_block in iter(lambda: f.read(4096), b""):
-                        sha256_hash.update(byte_block)
-                filename = sha256_hash.hexdigest()
-                df.at[indx, 'sha256_hash'] = filename
-                print("-------------------------------------------------------------------")
+                               
+                print(f"----------------------------START:{indx}---------------------------------------")
                 now = datetime.datetime.now()
                 date_time = now.strftime("%m/%d/%Y, %H:%M:%S")
-                print("File operation started at: ", date_time)
-                print("Next hash file::", df.at[indx, 'sha256_hash'])
-                print("Full_file_path::", full_file_path)
+                print(f"File operation started at:{date_time}")
+                elf_type = get_elf_file_type(full_file_path)
+                print(f"Full_file_path:{full_file_path}")
+                print(f"ELF type:{elf_type}")
+                print(f"----------------------------START:{indx}---------------------------------------")
                 
-                print("-------------------------------------------------------------------")
-                if indx % 100 == 0:
-                    print("Hundred Element Count:", indx)
-                
-                elf_data = {}
-
                 elf = lief.parse(full_file_path)
-                # Initialize a dictionary to hold the ELF data
-                elf_parse_result = {}
+                if not isinstance(elf, lief.ELF.Binary):
+                    print(f"Error.")
+                sha256_id = calculate_sha256(full_file_path)
+                elf_parse_result = {'sha256_hash': sha256_id, 'filename': filename}
 
-                # Call the extraction functions
                 elf_parse_result.update(extract_elf_file_header_info(elf))
-                elf_parse_result.update(extract_elf_section_headers_info(elf))
-                elf_parse_result.update(extract_elf_program_headers_info(elf))
+                if get_number_of_sections(full_file_path):
+                    elf_parse_result.update(extract_elf_section_headers_info(elf))
+                if get_number_of_program_headers(full_file_path):
+                    elf_parse_result.update(extract_elf_program_headers_info(elf))
                 elf_parse_result.update(extract_segment_to_section_mapping(elf))
                 elf_parse_result.update(extract_elf_import_info(elf))
                 elf_parse_result.update(extract_elf_export_info(elf))
-                #elf_parse_result.update(extract_elf_dynamic_info(elf))
-                #elf_parse_result.update(extract_elf_shared_lib_info(elf))
+                elf_parse_result.update(extract_elf_dynamic_info(elf))
+                elf_parse_result.update(extract_elf_shared_lib_info(elf))
                 elf_parse_result.update(extract_elf_file_version_needs(elf))
-
-
-                elf_notes_owner, elf_notes_build_id, elf_notes_abi_version = extract_elf_file_notes_info(elf)
-                print(f"ABI verison:{elf_notes_abi_version}\nBuild ID:{elf_notes_build_id}\nOwner:{elf_notes_owner}")
-
-                # Convert the ELF data dictionary into a DataFrame
-                df = pd.DataFrame([elf_data])
-                df_csv_path = f"{csv_output_dir}/{filename}.csv"
-                df_pkl_path = f"{csv_output_dir}/{filename}.pkl"             
-
-                # Save DataFrame as CSV
-                df.to_csv(df_csv_path, index=False)
-                print(f"{filename} information saved into csv:\n{df_csv_path}")
+                elf_parse_result.update(extract_elf_file_notes_info(elf))
                 
-                # Save DataFrame as pickle (.pkl)
-                df.to_pickle(df_pkl_path)
-                print(f"{filename} information saved into pkl:\n{df_pkl_path}")
+                binary_label = int(1) if is_malware else int(0)
+                elf_parse_result.update({"ELF_TYPE": elf_type, "label" : binary_label})
+                
+                df_tmp = pd.DataFrame.from_dict(elf_parse_result)
+                #df_tmp.insert(0, 'sha256_hash', sha256_id)
+                #df.at[indx, 'label'] = int(1) if is_malware else int(0)
 
-                df.at[indx, 'label'] = int(1) if is_malware else int(0)
+                print(f"----------------------------END:{indx}---------------------------------------")
+                # Save DataFrame as CSV
+                df_csv_path = f"{csv_output_dir}/{sha256_id}.csv"
+                df_tmp.to_csv(df_csv_path, index=False, quoting=csv.QUOTE_NONNUMERIC)
+                print(f"{filename} information saved into csv:\n{df_csv_path}")
+
+                df_json_path = f"{csv_output_dir}/{sha256_id}.json"
+                df_tmp.to_json(df_json_path, orient='records', indent=4)
+                print(f"{filename} information saved into JSON:\n{df_json_path}")
+                print(f"----------------------------END:{indx}---------------------------------------")
+                merged_df = pd.concat([df, df_tmp], ignore_index=True)
+                df = merged_df
                 indx = indx + 1
     return df
 
 def main(binary_dir, csv_output_dir, is_malware):
     eprint("----------ELF_Extractor_From_Files.err----------START----------")
-    elf_extractor_runner(binary_dir, csv_output_dir, is_malware)
+    df_total = elf_extractor_runner(binary_dir, csv_output_dir, is_malware)
+    print(df_total['sha256_hash'])
+    print(df_total['label'].value_counts())
+    print(df_total.shape)
+    df_total.to_json("total_dataset.json", orient='records', indent=4)
+    df_total.to_csv("total_dataset.csv", index=False)
     eprint("----------ELF_Extractor_From_Files.err---------- END ----------")
 
 if __name__ == "__main__":

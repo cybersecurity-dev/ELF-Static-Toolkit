@@ -10,22 +10,13 @@ import math
 import ssdeep
 import csv
 
+from elf_metadata import calculate_sha256 
+from elf_metadata import is_elf_file
+from elf_metadata import detect_architecture
+
 initflag = True
 
-def calculate_sha256(file_path):
-    sha256_hash = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
 
-def is_elf_file(filepath) -> bool:
-    """
-    Checks ELF file by inspecting its magic bytes.
-    """
-    with open(filepath, 'rb') as f:
-        magic_bytes = f.read(4)
-        return magic_bytes == b'\x7fELF'
     
 def clear_log_file(log_file_path) -> bool:
     try:
@@ -90,33 +81,6 @@ def get_number_of_program_headers(fpath):
     except Exception as e:
         raise Exception(f"Failed to parse the binary: {str(e)}")
     return len(binary.segments)
-
-def detect_architecture(fpath):
-    binary = lief.parse(fpath)
-    if binary is None:
-        print(f"File is not Binary:{fpath}\n")
-        raise Exception("Failed to parse the binary.")
-
-    machine_type = binary.header.machine_type
-    
-    if machine_type == lief.ELF.ARCH.ARM:
-        return "ARM (32-bit)"
-    elif machine_type == lief.ELF.ARCH.AARCH64:
-        return "ARM64"
-    elif machine_type == lief.ELF.ARCH.MIPS:
-        return "MIPS"
-    elif machine_type == lief.ELF.ARCH.I386:
-        return "Intel 80386"
-    elif machine_type == lief.ELF.ARCH.X86_64:
-        return "Intel x86-64"
-    elif machine_type == lief.ELF.ARCH.PPC64:
-        return "PowerPC64"
-    elif machine_type == lief.ELF.ARCH.RISCV:
-        return "RISC-V"
-    elif machine_type == lief.ELF.ARCH.IA_64:
-        return "IA-64 (Itanium)"
-    else:
-        return f"Unknown ELF architecture ({machine_type})"
 
 def has_unsupported_unwind_sections(fpath):
     """Check if an ELF binary contains unwind sections for Intel 80386 (x86) architecture."""

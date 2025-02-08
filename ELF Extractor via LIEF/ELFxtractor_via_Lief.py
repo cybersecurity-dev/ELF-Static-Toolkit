@@ -75,13 +75,6 @@ def get_number_of_sections(fpath):
         raise Exception(f"Failed to parse the binary: {str(e)}")
     return len(binary.sections)
 
-def get_number_of_program_headers(fpath):
-    try:
-        binary = lief.parse(fpath)
-    except Exception as e:
-        raise Exception(f"Failed to parse the binary: {str(e)}")
-    return len(binary.segments)
-
 def has_unsupported_unwind_sections(fpath):
     """Check if an ELF binary contains unwind sections for Intel 80386 (x86) architecture."""
     try:
@@ -146,24 +139,6 @@ def get_elf_type(fpath):
         print(f"An unexpected error occurred: {e}")
         return None
 
-def get_segment_flags(flags):
-    readable = False
-    writable = False
-    executable = False
-
-    if isinstance(flags, str):  # LIEF sometimes returns strings
-        readable = "R" in flags 
-        writable = "W" in flags
-        executable = "E" in flags
-    elif isinstance(flags, int):  # Sometimes it returns integers (raw flags)
-        readable = bool(flags & lief.ELF.PF_R)
-        writable = bool(flags & lief.ELF.PF_W)
-        executable = bool(flags & lief.ELF.PF_X)
-    else:
-        print(f"Unknown flags type: {type(flags)}")
-        return None , None, None # Or raise an exception
-
-    return readable, writable, executable
 
 def shannon_entropy(data: bytes) -> float:
     if not data:
@@ -265,66 +240,7 @@ def extract_elf_section_headers_info(elf_file) -> dict:
     #print(sections_info)
     return sections_info
 
-#Program Headers/Segment ##Checked  readelf --program-headers sample.elf
-def extract_elf_program_headers_info(elf_file) -> dict:
-    # Extract segments information
-    esegments = elf_file.segments
-    segments_info = {
-        "Number of Segments": len(elf_file.segments)
-    }
-    for segment_idx, segment in enumerate(esegments):
-         # Extract the segment content as bytes
 
-        Program_Headers_Type = segment.type.name if segment.type else "UNKNOWN"
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_offset"] = hex(segment.file_offset)
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_virtual_address"] = hex(segment.virtual_address)
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_physical_address"] = hex(segment.physical_address)
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_file_size"] = hex(segment.physical_size)
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_memory_size"] = hex(segment.virtual_size)
-        is_read, is_write, is_exec = get_segment_flags(segment.flags.name)
-        segments_info[f"{Program_Headers_Type}_segment_flags_READ"] = is_read
-        segments_info[f"{Program_Headers_Type}_segment_flags_WRITE"] = is_write
-        segments_info[f"{Program_Headers_Type}_segment_flags_EXECUTE"] = is_exec
-        #print(f"----->{get_segment_flags(segment.flags.name)}")
-        
-        
-        flags = []
-        # Define constants for segment flags
-        PF_R = 0x4  # Readable
-        PF_W = 0x2  # Writable
-        PF_X = 0x1  # Executable
-
-        if int(segment.flags) & PF_R:
-            flags.append("R")
-        if int(segment.flags) & PF_W:
-            flags.append("W")
-        if int(segment.flags) & PF_X:
-            flags.append("E")
-            segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_is_executable"] = True
-        else:
-            segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_is_executable"] = False
-     
-        flags_str = "".join(flags)
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_flags"] = flags_str
-
-
-
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_alignment"] = segment.alignment
-        segment_content = bytes(segment.content)
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_content"] = ' '.join([f'{byte:02x}' for byte in segment_content[:15]])
-        segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_shannon_entropy"] = shannon_entropy(segment_content)
-        try:
-            segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_ssdeep_hash"] = ssdeep.hash(segment_content)
-            #print(ssdeep.hash(segment_content))
-        except Exception as e:
-            print(f"Error calculating ssdeep for segment {Program_Headers_Type}: {e}")
-            segments_info[f"segment_{segment_idx}_{Program_Headers_Type}_segment_ssdeep_hash"] = "Error" # Or some other indicator
-    #for key, value in segments_info.items():
-    #    print(key, value)
-    # Add section information to the ELF data dictionary
-    #print(segments_info)
-    return segments_info
- 
 # Extract segment-to-section mapping ##Checked  readelf --program-headers sample.elf
 def extract_segment_to_section_mapping(elf_file) -> dict:
     esegments = elf_file.segments

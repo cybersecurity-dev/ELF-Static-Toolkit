@@ -207,44 +207,6 @@ def extract_elf_file_notes_info(elf) -> dict:
         eprint(f"An unexpected error occurred: {e}")
     return {"owner" : owner, "build_id" : build_id, "abi_version" : abi_version}
 
-#Section Headers  ##Checked  readelf --section-headers sample.elf
-def extract_elf_section_headers_info(elf_file) -> dict:
-    # Extract section information
-    esections = elf_file.sections
-    sections_info = {
-        "Number of Sections": len(elf_file.sections)
-    }
-    for section in esections:
-        #if section.type == "NULL":
-        #    continue
-        sections_info[f"{section.name}_type"] = section.type.name if section.type else "UNKNOWN"
-        sections_info[f"{section.name}_virtual_address"] = hex(section.virtual_address)
-        sections_info[f"{section.name}_offset"] = hex(section.offset),
-        sections_info[f"{section.name}_size"] = hex(section.size),
-        sections_info[f"{section.name}_entry_size"] = section.entry_size,
-        sections_info[f"{section.name}_flags"] = str(section.flags),  # Flags as bit field
-        sections_info[f"{section.name}_link"] = section.link,      
-        sections_info[f"{section.name}_information"] = section.information,      
-        sections_info[f"{section.name}_alignment"] = section.alignment,
-        sections_info[f"{section.name}_entropy"] = section.entropy,
-        #sections_info[f"{section.name}_content"] = list(section.content[:10])  # First 10 bytes of raw data
-        section_content = bytes(section.content)  # Ensure content is bytes
-        sections_info[f"{section.name}_content"] = ' '.join([f'{byte:02x}' for byte in section_content[:15]])
-        sections_info[f"{section.name}_shannon_entropy"] = shannon_entropy(section_content)
-        try:
-            sections_info[f"{section.name}_ssdeep_hash"] = ssdeep.hash(section_content)
-            #print(ssdeep.hash(section_content))
-        except Exception as e:
-            print(f"Error calculating ssdeep for section {section.type}: {e}")
-            sections_info[f"{section.name}_ssdeep_hash"] = "Error" # Or some other indicator
-
-    #for key, value in sections_info.items():
-    #    print(key, value)
-    # Add section information to the ELF data dictionary
-    #print(sections_info)
-    return sections_info
-
-
 def extract_elf_import_info(elf_file) -> dict:
     # Extract import table information
     dynamic_entries = elf_file.dynamic_entries

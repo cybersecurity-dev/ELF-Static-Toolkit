@@ -127,3 +127,28 @@ def extract_elf_program_headers_info(elf_file, fpath) -> dict:
             print(f"SSDEEP error:{fpath}")
             segments_info[f"program_header_{segment_idx}_segment_ssdeep_hash"] = "Error" # Or some other indicator
     return segments_info
+
+
+# Extract segment-to-section mapping 
+# Checked  readelf --program-headers sample.elf
+def extract_segment_to_section_mapping(elf_file, fpath) -> dict:
+    esegments = elf_file.segments
+    esections = elf_file.sections
+    segment_to_section_mapping_data = {}
+    dictionary_key_prefix = f"section_to_segment_mapping_segment"
+    
+    for segment_idx, segment in enumerate(esegments):
+        segment_to_section_mapping_data[f"{dictionary_key_prefix}{segment_idx}"] = 0
+        controller = True
+        for section in esections:
+            if  segment.virtual_address <= section.virtual_address < segment.virtual_address + segment.virtual_size:
+                if section.name != "":
+                    if controller:
+                        value = segment_to_section_mapping_data.pop(f"{dictionary_key_prefix}{segment_idx}")
+                        if value == "":
+                            print(f"Error:{fpath}")
+                        controller = not controller
+                    segment_to_section_mapping_data[f"{dictionary_key_prefix}{segment_idx}_{section.name}"] = 1
+                else:
+                    segment_to_section_mapping_data[f"{dictionary_key_prefix}{segment_idx}"] = 0
+    return segment_to_section_mapping_data

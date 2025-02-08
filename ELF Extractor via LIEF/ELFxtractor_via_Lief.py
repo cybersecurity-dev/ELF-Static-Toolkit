@@ -14,9 +14,13 @@ from elf_metadata import calculate_sha256
 from elf_metadata import is_elf_file
 from elf_metadata import detect_architecture
 
+from elf_file_header import extract_elf_file_header_info
+
+from elf_program_headers import extract_elf_program_headers_info
+from elf_program_headers import extract_segment_to_section_mapping
+
 initflag = True
 
-from elf_file_header import extract_elf_file_header_info
     
 def clear_log_file(log_file_path) -> bool:
     try:
@@ -240,25 +244,6 @@ def extract_elf_section_headers_info(elf_file) -> dict:
     #print(sections_info)
     return sections_info
 
-
-# Extract segment-to-section mapping ##Checked  readelf --program-headers sample.elf
-def extract_segment_to_section_mapping(elf_file) -> dict:
-    esegments = elf_file.segments
-    esections = elf_file.sections
-    segment_to_section_mapping_data = {}
-    for segment_idx, segment in enumerate(esegments):
-        sections_in_segment = []
-        for section in esections:
-            # Check if the section falls within the segment's range
-            if segment.file_offset <= section.offset < segment.file_offset + segment.physical_size:
-                if section.name != "":
-                    segment_to_section_mapping_data[f"section_to_segment_mapping_segment{segment_idx}_{section.name}_"] = 1
-                    #sections_in_segment.append(section.name)   
-    #for key, value in segment_to_section_mapping_data.items():
-    #    print(key, value)
-    # Add section information to the ELF data dictionary
-    #print(segment_to_section_mapping_data)
-    return segment_to_section_mapping_data
 
 def extract_elf_import_info(elf_file) -> dict:
     # Extract import table information

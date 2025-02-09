@@ -34,6 +34,24 @@ readelf --symbols bin.elf
 readelf --symbols bin.elf
 ```
 
+## Import Function names in ELF binary
+
+In ELF they're called undefined symbols. You can view the list of undefined symbols by:
+```bash
+nm -D <file>|grep -w U
+nm -C -D <file> | grep -w U | awk '{print $2}'
+objdump -T <file>|grep "\*UND\*"
+```
+
+
+## Export Function names in ELF binary
+
+To list the exported functions, you can use the following command:
+```bash
+nm -D <file> | grep -w U
+nm -C -D <file> | grep -w T | awk '{print $3}'
+objdump -T <file>|grep "\*UND\*"
+```
 
 
 

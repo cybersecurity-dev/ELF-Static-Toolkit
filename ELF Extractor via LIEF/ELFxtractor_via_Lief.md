@@ -43,7 +43,6 @@ nm -C -D <file> | grep -w U | awk '{print $2}'
 objdump -T <file>|grep "\*UND\*"
 ```
 
-
 ## Export Function names in ELF binary
 
 To list the exported functions, you can use the following command:
@@ -105,3 +104,17 @@ Here is a table that summarizes the key differences between these four types of 
 | executable or dynamic file                                  |      |     |     |      |
 | Contains a snapshot of the memory of a program when it       | No   | No  | No  | Yes  |
 | crashes                                                      |      |     |     |      |
+
+
+
+## Types of Segments
+
+* **PHDR**: This segment contains the program headers themselves, which are like a table of contents for the executable file.
+* **INTERP**: This segment specifies the interpreter that should be used to execute the program.
+* **LOAD**: This segment contains code or data that needs to be loaded into memory to run the program.
+* **DYNAMIC**: This segment contains information needed for dynamic linking, which is a way to link libraries of code at runtime.
+* **NOTE**: This segment contains additional information that might be useful for debugging or other tools.
+* **GNU_EH_FRAME**: This segment contains information about exception handling, which is a way for the program to gracefully deal with errors.
+* **GNU_STACK**: This segment indicates settings for the stack, which is a region of memory used for function calls and local variables.
+
+

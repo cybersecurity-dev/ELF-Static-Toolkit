@@ -52,8 +52,13 @@ def detect_architecture(fpath) -> str:
         print(f"File is not Binary:{fpath}\n")
         raise Exception("Failed to parse the binary.")
 
-    machine_type = binary.header.machine_type
-    
+    try:
+        machine_type = binary.header.machine_type
+    except ValueError as e: #ValueError: 255 is not a valid ARCH.
+        print(f"section type error:{fpath}")
+        ARCH_type_value = int(str(e).split()[0])
+        return f"Unknown ELF architecture ({ARCH_type_value})"
+
     if machine_type == lief.ELF.ARCH.ARM:
         return "ARM (32-bit)"
     elif machine_type == lief.ELF.ARCH.AARCH64:
@@ -102,8 +107,6 @@ def extract_elf_file_notes_info(elf, fpath) -> dict:
     try:
         owner, build_id = get_build_id(elf)
         owner, abi_version = get_abi_version(elf)
-    except lief.exception as lief_error:
-        print(f"LIEF Error: {lief_error}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         print(f"File:{fpath}")

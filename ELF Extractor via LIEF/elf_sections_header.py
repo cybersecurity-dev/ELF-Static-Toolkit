@@ -4,14 +4,19 @@ from elf_metadata import shannon_entropy
 
 # Section Headers  
 # Checked  readelf --section-headers sample.elf
-def extract_elf_section_headers_info(elf_file, fpath) -> dict:
+def extract_elf_section_headers_info(elf_sections, fpath) -> dict:
     # Extract section information
-    esections = elf_file.sections
-    sections_info = { "Number of Sections": len(elf_file.sections)  }
-    for section_idx, section in enumerate(esections):
-        section_info_prefix = f"{section_idx}_{section.name if section.name else "NULL"}"
+    sections_info = { "Number of Sections": len(elf_sections)  }
+    for section_idx, section in enumerate(elf_sections):
+        section_info_prefix = f"{section_idx}_{section.name if section.name else 'NULL' }"
 
-        sections_info[f"{section_info_prefix}_type"] = section.type.name if section.type.name != "SHT_NULL_" else "NULL"
+        try:
+            sections_info[f"{section_info_prefix}_type"] = section.type.name if section.type.name != "SHT_NULL_" else "NULL"
+        except ValueError as e: #ValueError: 1879048183 is not a valid TYPE.
+            print(f"section type error:{fpath}")
+            section_type_value = int(str(e).split()[0])
+            sections_info[f"{section_info_prefix}_type"] = f"{section_type_value}"
+        
         sections_info[f"{section_info_prefix}_virtual_address"] = hex(section.virtual_address)
         sections_info[f"{section_info_prefix}_offset"] = hex(section.offset),
         sections_info[f"{section_info_prefix}_size"] = hex(section.size),

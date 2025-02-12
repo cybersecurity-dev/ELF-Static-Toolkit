@@ -15,6 +15,7 @@ readelf --program-headers bin.elf
 ```
 
 ## Display the sections' header
+[extract_elf_section_headers_info()](https://github.com/cybersecurity-dev/ELF-Static-Toolkit/tree/main/ELF%20Extractor%20via%20LIEF/elf_sections_header.py#L7)
 ```bash
 # -S --section-headers Display the sections' header
 readelf --section-headers bin.elf

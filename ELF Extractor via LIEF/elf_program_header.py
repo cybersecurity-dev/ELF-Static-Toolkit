@@ -78,6 +78,8 @@ def get_program_header_type_category(segment, fpath):
         if Program_Headers_Category in ("UNKNOWN"):
             Program_Headers_Type_Name = f"UNKNOWN (0x{seg_type_value:x})"
             return Program_Headers_Type_Name, f"SPECIFIC"
+        #print(f"============>{segment.type.name}==={fpath}")
+
         return segment.type.name, Program_Headers_Category
     except:
         print(f"Exception at get_program_header_type_category:{fpath}")
@@ -85,8 +87,7 @@ def get_program_header_type_category(segment, fpath):
 
 #Program Headers/Segment 
 ##Checked  readelf --program-headers sample.elf
-def extract_elf_program_headers_info(elf_file, fpath) -> dict:
-    esegments = elf_file.segments
+def extract_elf_program_headers_info(elf_segments, fpath) -> dict:
     number_of_segment = get_number_of_segment(fpath)
     if not number_of_segment:
         return {}
@@ -94,8 +95,10 @@ def extract_elf_program_headers_info(elf_file, fpath) -> dict:
         "Number of Segments": number_of_segment
     }
 
-    for segment_idx, segment in enumerate(esegments):
+    for segment_idx, segment in enumerate(elf_segments):
         Program_Headers_Type, Program_Headers_Category = get_program_header_type_category(segment, fpath)
+        if Program_Headers_Type == "PT_NULL_":
+            continue
         segments_info[f"program_header_{segment_idx}_type"] = Program_Headers_Type
         segments_info[f"program_header_{segment_idx}_category"] = Program_Headers_Category
         segments_info[f"program_header_{segment_idx}_offset"] = hex(segment.file_offset)
@@ -117,30 +120,35 @@ def extract_elf_program_headers_info(elf_file, fpath) -> dict:
             segments_info[f"program_header_{segment_idx}_flags_EXECUTE"] = is_exec
 
         segments_info[f"program_header_{segment_idx}_segment_alignment"] = hex(segment.alignment)
-        segment_content = bytes(segment.content)
-        segments_info[f"program_header_{segment_idx}_segment_content"] = ' '.join([f'{byte:02x}' for byte in segment_content[:15]])
-        segments_info[f"program_header_{segment_idx}_segment_shannon_entropy"] = shannon_entropy(segment_content)
-        try:
-            segments_info[f"program_header_{segment_idx}_segment_ssdeep_hash"] = ssdeep.hash(segment_content)
-        except Exception as e:
-            print(f"Error calculating ssdeep for segment {Program_Headers_Type}: {e}")
-            print(f"SSDEEP error:{fpath}")
-            segments_info[f"program_header_{segment_idx}_segment_ssdeep_hash"] = "Error" # Or some other indicator
-    return segments_info
+        if Program_Headers_Type != "PT_NULL_":
+            segment_content = bytes(segment.content)
+            segments_info[f"program_header_{segment_idx}_segment_content"] = ' '.join([f'{byte:02x}' for byte in segment_content[:15]])
+            segments_info[f"program_header_{segment_idx}_segment_shannon_entropy"] = shannon_entropy(segment_content)            
+            try:
+                segments_info[f"program_header_{segment_idx}_segment_ssdeep_hash"] = ssdeep.hash(segment_content)
+            except Exception as e:
+                print(f"Error calculating ssdeep for segment {Program_Headers_Type}: {e}")
+                print(f"SSDEEP error:{fpath}")
+                segments_info[f"program_header_{segment_idx}_segment_ssdeep_hash"] = "NONE" # Or some other indicator
+        else:  
+            #PT_NULL: This is a special type of segment in an executable file that doesn't contain any data. 
+            #It's often used for padding or alignment purposes
+            segments_info[f"program_header_{segment_idx}_segment_content"] = f"NONE"
+            segments_info[f"program_header_{segment_idx}_segment_shannon_entropy"] = f"NONE"
+            segments_info[f"program_header_{segment_idx}_segment_ssdeep_hash"] = f"NONE"
 
+    return segments_info
 
 # Extract segment-to-section mapping 
 # Checked  readelf --program-headers sample.elf
-def extract_segment_to_section_mapping(elf_file, fpath) -> dict:
-    esegments = elf_file.segments
-    esections = elf_file.sections
+def extract_segment_to_section_mapping(elf_segments, elf_sections, fpath) -> dict:
     segment_to_section_mapping_data = {}
     dictionary_key_prefix = f"section_to_segment_mapping_segment"
     
-    for segment_idx, segment in enumerate(esegments):
+    for segment_idx, segment in enumerate(elf_segments):
         segment_to_section_mapping_data[f"{dictionary_key_prefix}{segment_idx}"] = 0
         controller = True
-        for section in esections:
+        for section in elf_sections:
             if  segment.virtual_address <= section.virtual_address < segment.virtual_address + segment.virtual_size:
                 if section.name != "":
                     if controller:

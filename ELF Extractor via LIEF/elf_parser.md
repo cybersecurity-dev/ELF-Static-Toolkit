@@ -3,14 +3,14 @@
 
   
 ## Display the ELF file header
-[extract_elf_file_header_info()](https://github.com/cybersecurity-dev/ELF-Static-Toolkit/tree/main/ELF%20Extractor%20via%20LIEF/elf_file_header.py#L4)
+[extract_elf_file_header_info()](https://github.com/cybersecurity-dev/ELF-Static-Toolkit/tree/main/ELF%20Extractor%20via%20LIEF/elf_header.py#L4)
 ```bash
 # -h --file-header  Display the ELF file header
 readelf --file-header bin.elf
 ```
 
 ## Display the program headers
-[extract_elf_program_headers_info()](https://github.com/cybersecurity-dev/ELF-Static-Toolkit/tree/main/ELF%20Extractor%20via%20LIEF/elf_program_headers.py#L88)
+[extract_elf_program_headers_info()](https://github.com/cybersecurity-dev/ELF-Static-Toolkit/tree/main/ELF%20Extractor%20via%20LIEF/elf_program_header.py#L88)
 ```bash
 # -l --program-headers Display the program headers
 readelf --program-headers bin.elf

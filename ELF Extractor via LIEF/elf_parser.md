@@ -1,7 +1,29 @@
 # ELF Internals
 
 
-  
+## Display ELF file status
+```bash
+# stat - display file or file system status
+stat bin.elf
+```
+| Field        | Value                                   |
+|--------------|-----------------------------------------|
+| File         | /usr/bin/ls                             |
+| Size         | 49                                      |
+| Blocks       | 8                                       |
+| IO Block     | 4096                                    |
+| Type         | regular file                            |
+| Device       | 805h/2053d                              |
+| Inode        | 58722364                                |
+| Links        | 1                                       |
+| Uid          | 0/root                                  |
+| Gid          | 0/root                                  |
+| Access       | (0555/-r-xr-xr-x)                       |
+| Access time  | 2025-02-16 09:43:35.248158910 +0100     |
+| Modified     | 2023-01-18 15:52:14.000000000 +0100     |
+| Changed      | 2024-04-16 14:04:10.252000353 +0200     |
+| Birth        | -                                       |
+
 ## Display the ELF file header
 [extract_elf_file_header_info()](https://github.com/cybersecurity-dev/ELF-Static-Toolkit/tree/main/ELF%20Extractor%20via%20LIEF/elf_header.py#L4)
 ```bash
@@ -119,5 +141,4 @@ Here is a table that summarizes the key differences between these four types of 
 * **NOTE**: This segment contains additional information that might be useful for debugging or other tools.
 * **GNU_EH_FRAME**: This segment contains information about exception handling, which is a way for the program to gracefully deal with errors.
 * **GNU_STACK**: This segment indicates settings for the stack, which is a region of memory used for function calls and local variables.
-
 

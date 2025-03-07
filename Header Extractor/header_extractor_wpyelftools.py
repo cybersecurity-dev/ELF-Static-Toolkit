@@ -2,6 +2,9 @@ import os
 import json
 import sys
 import argparse
+import multiprocessing
+from concurrent.futures import ThreadPoolExecutor
+
 import xml.etree.ElementTree as ET
 from elftools.elf.elffile import ELFFile
 from elftools.elf.enums import ENUM_E_TYPE, ENUM_E_MACHINE
@@ -87,7 +90,6 @@ def save_to_xml(data, output_file):
         print(f"XML saved to {output_file}")
     except Exception as e:
         print(f"Error saving XML to {output_file}: {e}")
-
 def process_single_file(file_path, output_dir=None):
     """Process a single ELF file and save its header info."""
     if not is_elf_file(file_path):
@@ -109,8 +111,8 @@ def process_single_file(file_path, output_dir=None):
     else:
         print(f"Failed to extract header from {file_path}.")
 
-def process_directory(dir_path):
-    """Process all ELF files in a directory and save results in elf_extracted subdirectory."""
+def process_directory(dir_path, num_threads):
+    """Process all ELF files in a directory using multiple threads and save results in elf_extracted subdirectory."""
     if not os.path.isdir(dir_path):
         print(f"{dir_path} is not a valid directory.")
         return
@@ -124,31 +126,55 @@ def process_directory(dir_path):
         print(f"Error creating output directory {output_dir}: {e}")
         return
 
-    # Process each file in the directory
-    for file_name in os.listdir(dir_path):
-        file_path = os.path.join(dir_path, file_name)
-        if os.path.isfile(file_path) and is_elf_file(file_path):
-            print(f"Processing {file_path}...")
-            process_single_file(file_path, output_dir)
-        else:
-            print(f"Skipping {file_path} (not an ELF file).")
+    # Collect ELF files
+    elf_files = [
+        os.path.join(dir_path, file_name)
+        for file_name in os.listdir(dir_path)
+        if os.path.isfile(os.path.join(dir_path, file_name)) and is_elf_file(os.path.join(dir_path, file_name))
+    ]
+
+    if not elf_files:
+        print(f"No ELF files found in {dir_path}.")
+        return
+
+    print(f"Found {len(elf_files)} ELF files to process with {num_threads} threads.")
+
+    # Process files using ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = [
+            executor.submit(process_single_file, file_path, output_dir)
+            for file_path in elf_files
+        ]
+        # Wait for all tasks to complete
+        for future in futures:
+            try:
+                future.result()
+            except Exception as e:
+                print(f"Error in thread: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Extract ELF header information and save as JSON/XML.")
     parser.add_argument("path", help="Path to a single ELF file or a directory containing ELF files.")
+    parser.add_argument(
+        "-t", "--threads",
+        type=int,
+        default=min(multiprocessing.cpu_count(), 4),
+        help="Number of threads to use for directory processing (default: min(CPU count, 4))."
+    )
     args = parser.parse_args()
 
     input_path = args.path
+    num_threads = max(1, args.threads)  # Ensure at least 1 thread
 
     if os.path.isfile(input_path):
         process_single_file(input_path)
     elif os.path.isdir(input_path):
-        process_directory(input_path)
+        process_directory(input_path, num_threads)
     else:
         print(f"Error: '{input_path}' is neither a valid file nor a directory.")
         sys.exit(1)
 
 # pip install pyelftools
-# python3 header_extractor_wpyelftools.py /bin/ls
+# python3 header_extractor_wpyelftools.py <elf_file_or_directory> ...
 if __name__ == "__main__":
     main()

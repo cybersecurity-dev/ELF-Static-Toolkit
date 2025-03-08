@@ -2,6 +2,7 @@ import os
 import json
 import sys
 import argparse
+import hashlib
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 
@@ -18,6 +19,18 @@ def is_elf_file(file_path):
     except:
         return False
 
+def calculate_sha256(file_path):
+    """Calculate the SHA-256 hash of a file."""
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b''):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
+    except Exception as e:
+        print(f"Error calculating SHA-256 for {file_path}: {e}")
+        return None
+
 def extract_elf_header(file_path):
     """Extract ELF header information from a given file."""
     try:
@@ -27,6 +40,8 @@ def extract_elf_header(file_path):
 
             # Extract relevant header information
             header_info = {
+                'file_name': os.path.basename(file_path),
+                'file_sha256': calculate_sha256(file_path),
                 'e_ident': {
                     'EI_MAG': ''.join([f'{c:02X}' for c in elf_header['e_ident']['EI_MAG']]),  # Hex representation
                     'EI_CLASS': elf_header['e_ident']['EI_CLASS'],
@@ -173,7 +188,6 @@ def main():
     else:
         print(f"Error: '{input_path}' is neither a valid file nor a directory.")
         sys.exit(1)
-
 # pip install pyelftools
 # python3 header_extractor_wpyelftools.py <elf_file_or_directory> ...
 if __name__ == "__main__":

@@ -3,10 +3,13 @@ import json
 import sys
 import argparse
 import hashlib
+import pandas as pd
+
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 
 import xml.etree.ElementTree as ET
+
 from elftools.elf.elffile import ELFFile
 from elftools.elf.enums import ENUM_E_TYPE, ENUM_E_MACHINE
 
@@ -69,6 +72,35 @@ def extract_elf_header(file_path):
         print(f"Error reading ELF file {file_path}: {e}")
         return None
 
+def flatten_header_info(header_info):
+    """Flatten header_info dictionary for CSV output."""
+    if not header_info:
+        return {}
+    flat_info = {
+        'file_name': header_info.get('file_name'),
+        'file_sha256': header_info.get('file_sha256'),
+        'EI_MAG': header_info['e_ident'].get('EI_MAG'),
+        'EI_CLASS': header_info['e_ident'].get('EI_CLASS'),
+        'EI_DATA': header_info['e_ident'].get('EI_DATA'),
+        'EI_VERSION': header_info['e_ident'].get('EI_VERSION'),
+        'EI_OSABI': header_info['e_ident'].get('EI_OSABI'),
+        'EI_ABIVERSION': header_info['e_ident'].get('EI_ABIVERSION'),
+        'e_type': header_info.get('e_type'),
+        'e_machine': header_info.get('e_machine'),
+        'e_version': header_info.get('e_version'),
+        'e_entry': header_info.get('e_entry'),
+        'e_phoff': header_info.get('e_phoff'),
+        'e_shoff': header_info.get('e_shoff'),
+        'e_flags': header_info.get('e_flags'),
+        'e_ehsize': header_info.get('e_ehsize'),
+        'e_phentsize': header_info.get('e_phentsize'),
+        'e_phnum': header_info.get('e_phnum'),
+        'e_shentsize': header_info.get('e_shentsize'),
+        'e_shnum': header_info.get('e_shnum'),
+        'e_shstrndx': header_info.get('e_shstrndx')
+    }
+    return flat_info
+
 def save_to_json(data, output_file):
     """Save data to a JSON file."""
     try:
@@ -105,11 +137,26 @@ def save_to_xml(data, output_file):
         print(f"XML saved to {output_file}")
     except Exception as e:
         print(f"Error saving XML to {output_file}: {e}")
+
+def save_to_csv(header_list, output_file):
+    """Save list of header info dictionaries to a CSV file."""
+    try:
+        if not header_list:
+            print(f"No data to save to CSV: {output_file}")
+            return
+        # Flatten all header info
+        flat_data = [flatten_header_info(header) for header in header_list]
+        df = pd.DataFrame(flat_data)
+        df.to_csv(output_file, index=False)
+        print(f"CSV saved to {output_file}")
+    except Exception as e:
+        print(f"Error saving CSV to {output_file}: {e}")
+
 def process_single_file(file_path, output_dir=None):
     """Process a single ELF file and save its header info."""
     if not is_elf_file(file_path):
         print(f"{file_path} is not a valid ELF file.")
-        return
+        return None
 
     header_info = extract_elf_header(file_path)
     if header_info:
@@ -123,16 +170,17 @@ def process_single_file(file_path, output_dir=None):
 
         save_to_json(header_info, json_output)
         save_to_xml(header_info, xml_output)
+        return header_info
     else:
         print(f"Failed to extract header from {file_path}.")
+        return None
 
 def process_directory(dir_path, num_threads):
-    """Process all ELF files in a directory using multiple threads and save results in elf_extracted subdirectory."""
+    """Process all ELF files in a directory using multiple threads."""
     if not os.path.isdir(dir_path):
         print(f"{dir_path} is not a valid directory.")
         return
 
-    # Create output directory
     output_dir = os.path.join(dir_path, 'elf_extracted')
     try:
         os.makedirs(output_dir, exist_ok=True)
@@ -141,7 +189,6 @@ def process_directory(dir_path, num_threads):
         print(f"Error creating output directory {output_dir}: {e}")
         return
 
-    # Collect ELF files
     elf_files = [
         os.path.join(dir_path, file_name)
         for file_name in os.listdir(dir_path)
@@ -154,21 +201,27 @@ def process_directory(dir_path, num_threads):
 
     print(f"Found {len(elf_files)} ELF files to process with {num_threads} threads.")
 
-    # Process files using ThreadPoolExecutor
+    header_list = []
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [
             executor.submit(process_single_file, file_path, output_dir)
             for file_path in elf_files
         ]
-        # Wait for all tasks to complete
         for future in futures:
             try:
-                future.result()
+                result = future.result()
+                if result:
+                    header_list.append(result)
             except Exception as e:
                 print(f"Error in thread: {e}")
 
+    # Save CSV if there are headers
+    if header_list:
+        csv_output = os.path.join(output_dir, 'all_header_feature.csv')
+        save_to_csv(header_list, csv_output)
+
 def main():
-    parser = argparse.ArgumentParser(description="Extract ELF header information and save as JSON/XML.")
+    parser = argparse.ArgumentParser(description="Extract ELF header information and save as JSON/XML/CSV.")
     parser.add_argument("path", help="Path to a single ELF file or a directory containing ELF files.")
     parser.add_argument(
         "-t", "--threads",
@@ -179,7 +232,7 @@ def main():
     args = parser.parse_args()
 
     input_path = args.path
-    num_threads = max(1, args.threads)  # Ensure at least 1 thread
+    num_threads = max(1, args.threads)
 
     if os.path.isfile(input_path):
         process_single_file(input_path)
@@ -188,6 +241,7 @@ def main():
     else:
         print(f"Error: '{input_path}' is neither a valid file nor a directory.")
         sys.exit(1)
+
 # pip install pyelftools
 # python3 header_extractor_wpyelftools.py <elf_file_or_directory> ...
 if __name__ == "__main__":

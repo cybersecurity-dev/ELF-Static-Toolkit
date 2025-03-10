@@ -13,13 +13,17 @@ import xml.etree.ElementTree as ET
 from elftools.elf.elffile import ELFFile
 from elftools.elf.enums import ENUM_E_TYPE, ENUM_E_MACHINE
 
-def is_elf_file(file_path):
+def is_elf_file(file_path, verbose=False):
     """Check if a file is an ELF file by reading the magic number."""
     try:
         with open(file_path, 'rb') as f:
             magic = f.read(4)
+            if magic != b'\x7fELF' and verbose:
+                print(f"Skipping {file_path}: Not an ELF file (magic: {magic.hex()})")
             return magic == b'\x7fELF'
-    except:
+    except Exception as e:
+        if verbose:
+            print(f"Skipping {file_path}: Cannot read file ({e})")
         return False
 
 def calculate_sha256(file_path):
@@ -34,19 +38,20 @@ def calculate_sha256(file_path):
         print(f"Error calculating SHA-256 for {file_path}: {e}")
         return None
 
-def extract_elf_header(file_path):
-    """Extract ELF header information from a given file."""
+def extract_elf_header(file_path, verbose=False):
+    """Extract ELF header information, including file name and SHA-256."""
+    if verbose:
+        print(f"Parsing {file_path}")
     try:
         with open(file_path, 'rb') as f:
             elf_file = ELFFile(f)
             elf_header = elf_file.header
 
-            # Extract relevant header information
             header_info = {
                 'file_name': os.path.basename(file_path),
                 'file_sha256': calculate_sha256(file_path),
                 'e_ident': {
-                    'EI_MAG': ''.join([f'{c:02X}' for c in elf_header['e_ident']['EI_MAG']]),  # Hex representation
+                    'EI_MAG': ''.join([f'{c:02X}' for c in elf_header['e_ident']['EI_MAG']]),
                     'EI_CLASS': elf_header['e_ident']['EI_CLASS'],
                     'EI_DATA': elf_header['e_ident']['EI_DATA'],
                     'EI_VERSION': elf_header['e_ident']['EI_VERSION'],
@@ -69,7 +74,8 @@ def extract_elf_header(file_path):
             }
             return header_info
     except Exception as e:
-        print(f"Error reading ELF file {file_path}: {e}")
+        if verbose:
+            print(f"Failed to parse {file_path}: {e}")
         return None
 
 def flatten_header_info(header_info):
@@ -138,27 +144,27 @@ def save_to_xml(data, output_file):
     except Exception as e:
         print(f"Error saving XML to {output_file}: {e}")
 
-def save_to_csv(header_list, output_file):
+def save_to_csv(header_list, output_file, verbose=False):
     """Save list of header info dictionaries to a CSV file."""
     try:
         if not header_list:
             print(f"No data to save to CSV: {output_file}")
             return
-        # Flatten all header info
         flat_data = [flatten_header_info(header) for header in header_list]
         df = pd.DataFrame(flat_data)
         df.to_csv(output_file, index=False)
         print(f"CSV saved to {output_file}")
+        if verbose:
+            print(f"CSV dimensions: {len(df)} rows, {len(df.columns)} columns")
     except Exception as e:
         print(f"Error saving CSV to {output_file}: {e}")
 
-def process_single_file(file_path, output_dir=None):
+def process_single_file(file_path, output_dir=None, verbose=False):
     """Process a single ELF file and save its header info."""
-    if not is_elf_file(file_path):
-        print(f"{file_path} is not a valid ELF file.")
+    if not is_elf_file(file_path, verbose):
         return None
 
-    header_info = extract_elf_header(file_path)
+    header_info = extract_elf_header(file_path, verbose)
     if header_info:
         file_name = os.path.basename(file_path)
         if output_dir:
@@ -171,11 +177,9 @@ def process_single_file(file_path, output_dir=None):
         save_to_json(header_info, json_output)
         save_to_xml(header_info, xml_output)
         return header_info
-    else:
-        print(f"Failed to extract header from {file_path}.")
-        return None
+    return None
 
-def process_directory(dir_path, num_threads):
+def process_directory(dir_path, num_threads, verbose=False):
     """Process all ELF files in a directory using multiple threads."""
     if not os.path.isdir(dir_path):
         print(f"{dir_path} is not a valid directory.")
@@ -192,19 +196,21 @@ def process_directory(dir_path, num_threads):
     elf_files = [
         os.path.join(dir_path, file_name)
         for file_name in os.listdir(dir_path)
-        if os.path.isfile(os.path.join(dir_path, file_name)) and is_elf_file(os.path.join(dir_path, file_name))
+        if os.path.isfile(os.path.join(dir_path, file_name))
     ]
 
     if not elf_files:
-        print(f"No ELF files found in {dir_path}.")
+        print(f"No files found in {dir_path}.")
         return
 
-    print(f"Found {len(elf_files)} ELF files to process with {num_threads} threads.")
+    if verbose:
+        print(f"Scanning {len(elf_files)} files in {dir_path}...")
 
+    # Filter ELF files and collect headers
     header_list = []
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [
-            executor.submit(process_single_file, file_path, output_dir)
+            executor.submit(process_single_file, file_path, output_dir, verbose)
             for file_path in elf_files
         ]
         for future in futures:
@@ -213,12 +219,15 @@ def process_directory(dir_path, num_threads):
                 if result:
                     header_list.append(result)
             except Exception as e:
-                print(f"Error in thread: {e}")
+                if verbose:
+                    print(f"Thread error: {e}")
 
-    # Save CSV if there are headers
     if header_list:
+        print(f"Processed {len(header_list)} ELF files.")
         csv_output = os.path.join(output_dir, 'all_header_feature.csv')
-        save_to_csv(header_list, csv_output)
+        save_to_csv(header_list, csv_output, verbose)
+    elif verbose:
+        print("No ELF files were successfully processed.")
 
 def main():
     parser = argparse.ArgumentParser(description="Extract ELF header information and save as JSON/XML/CSV.")
@@ -229,15 +238,21 @@ def main():
         default=min(multiprocessing.cpu_count(), 4),
         help="Number of threads to use for directory processing (default: min(CPU count, 4))."
     )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose output: list parsed files, non-ELF files, and CSV dimensions."
+    )
     args = parser.parse_args()
 
     input_path = args.path
     num_threads = max(1, args.threads)
+    verbose = args.verbose
 
     if os.path.isfile(input_path):
-        process_single_file(input_path)
+        process_single_file(input_path, verbose=verbose)
     elif os.path.isdir(input_path):
-        process_directory(input_path, num_threads)
+        process_directory(input_path, num_threads, verbose)
     else:
         print(f"Error: '{input_path}' is neither a valid file nor a directory.")
         sys.exit(1)

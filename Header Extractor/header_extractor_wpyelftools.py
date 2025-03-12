@@ -4,7 +4,7 @@ import sys
 import argparse
 import hashlib
 import pandas as pd
-
+import configparser
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 
@@ -206,7 +206,6 @@ def process_directory(dir_path, num_threads, verbose=False):
     if verbose:
         print(f"Scanning {len(elf_files)} files in {dir_path}...")
 
-    # Filter ELF files and collect headers
     header_list = []
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [
@@ -229,9 +228,61 @@ def process_directory(dir_path, num_threads, verbose=False):
     elif verbose:
         print("No ELF files were successfully processed.")
 
+def read_config(config_path, verbose=False):
+    """Read settings from a .conf file."""
+    config = configparser.ConfigParser()
+    settings = {
+        'path': None,
+        'threads': None,
+        'verbose': False
+    }
+
+    if not os.path.isfile(config_path):
+        if verbose:
+            print(f"Config file {config_path} does not exist.")
+        return settings
+
+    try:
+        config.read(config_path)
+        if 'Settings' not in config:
+            if verbose:
+                print(f"Config file {config_path} missing [Settings] section.")
+            return settings
+
+        # Read path
+        if config['Settings'].get('path'):
+            settings['path'] = config['Settings']['path'].strip()
+            if verbose and not (os.path.isfile(settings['path']) or os.path.isdir(settings['path'])):
+                print(f"Warning: Config path '{settings['path']}' is invalid; will fall back to command-line.")
+
+        # Read threads
+        try:
+            if config['Settings'].get('threads'):
+                settings['threads'] = int(config['Settings']['threads'])
+                if settings['threads'] < 1:
+                    if verbose:
+                        print("Warning: Config threads < 1; will fall back to command-line or default.")
+                    settings['threads'] = None
+        except ValueError:
+            if verbose:
+                print("Warning: Invalid threads value in config; will fall back to command-line or default.")
+            settings['threads'] = None
+
+        # Read verbose
+        if config['Settings'].get('verbose'):
+            verbose_str = config['Settings']['verbose'].strip().lower()
+            settings['verbose'] = verbose_str == 'true'
+
+        if verbose:
+            print(f"Loaded config: path={settings['path']}, threads={settings['threads']}, verbose={settings['verbose']}")
+    except Exception as e:
+        if verbose:
+            print(f"Error reading config file {config_path}: {e}")
+    return settings
+
 def main():
-    parser = argparse.ArgumentParser(description="Extract ELF header information and save as JSON/XML/CSV.")
-    parser.add_argument("path", help="Path to a single ELF file or a directory containing ELF files.")
+    parser = argparse.ArgumentParser(description="Extract ELF header information and save as JSON/XML/CSV using LIEF.")
+    parser.add_argument("path", nargs='?', default=None, help="Path to a single ELF file or a directory containing ELF files.")
     parser.add_argument(
         "-t", "--threads",
         type=int,
@@ -243,12 +294,33 @@ def main():
         action="store_true",
         help="Enable verbose output: list parsed files, non-ELF files, and CSV dimensions."
     )
+    parser.add_argument(
+        "-c", "--config",
+        type=str,
+        default=None,
+        help="Path to a .conf file specifying path, threads, and verbose settings."
+    )
     args = parser.parse_args()
 
+    # Initialize settings
     input_path = args.path
     num_threads = max(1, args.threads)
     verbose = args.verbose
 
+    # Read config file if provided
+    if args.config:
+        config_settings = read_config(args.config, verbose)
+        # Override with config values if valid
+        input_path = config_settings['path'] if config_settings['path'] else input_path
+        num_threads = max(1, config_settings['threads']) if config_settings['threads'] is not None else num_threads
+        verbose = config_settings['verbose'] or verbose  # Config verbose=true overrides CLI --verbose
+
+    # Validate input path
+    if not input_path:
+        print("Error: No input path provided (via command-line or config).")
+        sys.exit(1)
+
+    # Process file or directory
     if os.path.isfile(input_path):
         process_single_file(input_path, verbose=verbose)
     elif os.path.isdir(input_path):
@@ -257,7 +329,12 @@ def main():
         print(f"Error: '{input_path}' is neither a valid file nor a directory.")
         sys.exit(1)
 
+# pip show pyelftools
+# pip show pandas
+
 # pip install pyelftools
+# pip install pandas
+
 # python3 header_extractor_wpyelftools.py <elf_file_or_directory> ...
 if __name__ == "__main__":
     main()

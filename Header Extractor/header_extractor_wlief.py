@@ -6,6 +6,7 @@ import hashlib
 import pandas as pd
 import lief
 import multiprocessing
+import configparser
 from concurrent.futures import ThreadPoolExecutor
 
 import xml.etree.ElementTree as ET
@@ -54,7 +55,7 @@ def extract_elf_header(file_path, verbose=False):
                 'EI_MAG': ''.join([f'{c:02X}' for c in header.identity]),  # First 4 bytes
                 'EI_CLASS': str(header.identity_class),  # e.g., ELF_CLASS_64
                 'EI_DATA': str(header.identity_data),    # e.g., ELFDATA2LSB
-                'EI_VERSION': header.identity_version,   # Typically 1 #EI_VERSION (Identification Version)
+                'EI_VERSION': int(header.identity_version),   # Typically 1 #EI_VERSION (Identification Version)
                 'EI_OSABI': str(header.identity_os_abi), # e.g., ELFOSABI_SYSV
                 'EI_ABIVERSION': header.identity_abi_version
             },
@@ -62,7 +63,7 @@ def extract_elf_header(file_path, verbose=False):
             'e_machine': str(header.machine_type),     # e.g., EM_X86_64
             
              # Note: LIEF 0.16.4 does not expose e_version directly; 
-            'e_version': header.identity_version, # using identity_version as proxy #e_version (Object File Version)
+            'e_version': int(header.identity_version), # using identity_version as proxy #e_version (Object File Version)
             
             'e_entry': hex(header.entrypoint),
             'e_phoff': hex(header.program_header_offset),
@@ -231,9 +232,61 @@ def process_directory(dir_path, num_threads, verbose=False):
     elif verbose:
         print("No ELF files were successfully processed.")
 
+def read_config(config_path, verbose=False):
+    """Read settings from a .conf file."""
+    config = configparser.ConfigParser()
+    settings = {
+        'path': None,
+        'threads': None,
+        'verbose': False
+    }
+
+    if not os.path.isfile(config_path):
+        if verbose:
+            print(f"Config file {config_path} does not exist.")
+        return settings
+
+    try:
+        config.read(config_path)
+        if 'Settings' not in config:
+            if verbose:
+                print(f"Config file {config_path} missing [Settings] section.")
+            return settings
+
+        # Read path
+        if config['Settings'].get('path'):
+            settings['path'] = config['Settings']['path'].strip()
+            if verbose and not (os.path.isfile(settings['path']) or os.path.isdir(settings['path'])):
+                print(f"Warning: Config path '{settings['path']}' is invalid; will fall back to command-line.")
+
+        # Read threads
+        try:
+            if config['Settings'].get('threads'):
+                settings['threads'] = int(config['Settings']['threads'])
+                if settings['threads'] < 1:
+                    if verbose:
+                        print("Warning: Config threads < 1; will fall back to command-line or default.")
+                    settings['threads'] = None
+        except ValueError:
+            if verbose:
+                print("Warning: Invalid threads value in config; will fall back to command-line or default.")
+            settings['threads'] = None
+
+        # Read verbose
+        if config['Settings'].get('verbose'):
+            verbose_str = config['Settings']['verbose'].strip().lower()
+            settings['verbose'] = verbose_str == 'true'
+
+        if verbose:
+            print(f"Loaded config: path={settings['path']}, threads={settings['threads']}, verbose={settings['verbose']}")
+    except Exception as e:
+        if verbose:
+            print(f"Error reading config file {config_path}: {e}")
+    return settings
+
 def main():
     parser = argparse.ArgumentParser(description="Extract ELF header information and save as JSON/XML/CSV using LIEF.")
-    parser.add_argument("path", help="Path to a single ELF file or a directory containing ELF files.")
+    parser.add_argument("path", nargs='?', default=None, help="Path to a single ELF file or a directory containing ELF files.")
     parser.add_argument(
         "-t", "--threads",
         type=int,
@@ -245,12 +298,33 @@ def main():
         action="store_true",
         help="Enable verbose output: list parsed files, non-ELF files, and CSV dimensions."
     )
+    parser.add_argument(
+        "-c", "--config",
+        type=str,
+        default=None,
+        help="Path to a .conf file specifying path, threads, and verbose settings."
+    )
     args = parser.parse_args()
 
+    # Initialize settings
     input_path = args.path
     num_threads = max(1, args.threads)
     verbose = args.verbose
 
+    # Read config file if provided
+    if args.config:
+        config_settings = read_config(args.config, verbose)
+        # Override with config values if valid
+        input_path = config_settings['path'] if config_settings['path'] else input_path
+        num_threads = max(1, config_settings['threads']) if config_settings['threads'] is not None else num_threads
+        verbose = config_settings['verbose'] or verbose  # Config verbose=true overrides CLI --verbose
+
+    # Validate input path
+    if not input_path:
+        print("Error: No input path provided (via command-line or config).")
+        sys.exit(1)
+
+    # Process file or directory
     if os.path.isfile(input_path):
         process_single_file(input_path, verbose=verbose)
     elif os.path.isdir(input_path):

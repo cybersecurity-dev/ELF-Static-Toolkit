@@ -1,4 +1,4 @@
-# ELF Static Toolkit | Executable and Linkable Format ([ELF](https://www.cs.cmu.edu/afs/cs/academic/class/15213-f00/docs/elf.pdf)) Analysing Toolkit
+# [ELF](https://youtube.com/playlist?list=PL9V4Zu3RroiVlMaBS8X6_nkXz6FPyGa-O&si=-W_udRBVwMf6kdi5) Static Toolkit | Executable and Linkable Format ([ELF](https://www.cs.cmu.edu/afs/cs/academic/class/15213-f00/docs/elf.pdf)) Analysing Toolkit
 
 <details>
 

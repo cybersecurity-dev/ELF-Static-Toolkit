@@ -5,6 +5,9 @@
 </p>
 
 # [ELF](https://youtube.com/playlist?list=PL9V4Zu3RroiVlMaBS8X6_nkXz6FPyGa-O&si=-W_udRBVwMf6kdi5) Static Toolkit | Executable and Linkable Format ([ELF](https://www.cs.cmu.edu/afs/cs/academic/class/15213-f00/docs/elf.pdf)) Analysing Toolkit
+[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000.svg?style=for-the-badge&logo=YouTube&logoColor=white)]()
+[![Reddit](https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white)]()
+
 <p align="center">
     <a href="https://github.com/cybersecurity-dev/"><img height="25" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/github.svg" alt="GitHub"></a>
     &nbsp;

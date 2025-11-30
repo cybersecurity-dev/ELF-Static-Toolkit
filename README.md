@@ -22,14 +22,17 @@
 </p>
 
 ## 📖 Contents
+- [Installation Steps](#installation-steps)
 - [My Awesome Lists](#my-awesome-lists)
 - [Contributing](#contributing)
 - [Contributors](#contributors)
+
 ---
 ---
+
+## Installation Steps
 
 <details>
-
 <summary>Install required tools on Linux</summary>
 
 ### For Ubuntu 18.04, 20.04, 22.04
@@ -68,7 +71,6 @@ python3 setup.py install
 ```
 
 </details>
-
 
 ##
 

@@ -59,8 +59,10 @@ sudo apt-get update
 
 ### pip install
 ```script
+python -m venv w_elf
+source w_elf/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
-python3 setup.py install
 ```
 
 ### conda install

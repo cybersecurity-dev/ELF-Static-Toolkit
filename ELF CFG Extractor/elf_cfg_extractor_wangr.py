@@ -45,12 +45,15 @@ def elf_to_cfg(binary_path : Path) -> nx.DiGraph:
         if block is None:
             continue
 
+        func = cfg.kb.functions.get(node.function_address, None)
+        func_name = func.name if func else "UNKNOWN"
+
         cfg_graph.add_node(node.addr,
                            addr=node.addr,
                            size=block.size,
-                           function_addr=node.function_address,
-                           instr_count=len(block.capstone.insns)
-                          )
+                           instr_count=len(block.capstone.insns),
+                           function_name=func_name,
+                           function_addr=node.function_address)
 
     for src, dst, data in cfg.graph.edges(data=True):
         if src.block is None or dst.block is None:

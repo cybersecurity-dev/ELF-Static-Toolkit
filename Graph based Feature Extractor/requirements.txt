@@ -1,0 +1,9 @@
+angr
+r2pipe
+capstone
+pyelftools
+networkx 
+pydot
+angrutils 
+torch
+torch-geometric

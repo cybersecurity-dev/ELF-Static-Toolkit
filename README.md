@@ -1,10 +1,39 @@
 <div align="center">
     <p align="center">
         <a href="https://wiki.osdev.org/ELF">
-          <img width="40%" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/ELF_internals.jpg" />
+          <img width="60%" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/ELF_internals.jpg" />
         </a>
     </p>
 
+```mermaid
+mindmap
+ root((ELF Analysis))
+ 
+   Static Analysis
+     readelf
+     objdump
+     nm
+     strings
+     file
+
+   Dynamic Analysis
+     ldd
+     strace
+     ltrace
+     gdb
+
+   Reverse Engineering
+     Ghidra
+     IDA Pro
+     Binary Ninja
+     Radare2
+
+   Malware Analysis
+     YARA
+     CAPA
+     VirusTotal
+     Cuckoo Sandbox
+```
 # **`ELF Static Toolkit`** | Executable and Linkable Format ([ELF](https://www.cs.cmu.edu/afs/cs/academic/class/15213-f00/docs/elf.pdf)) Analysing Toolkit
 </div>
 
@@ -15,7 +44,7 @@
 <p align="center">
     <a href="https://github.com/cybersecurity-dev/"><img height="25" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/github.svg" alt="GitHub"></a>
     &nbsp;
-    <a href="https://www.youtube.com/@CyberThreatDefence"><img height="25" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/youtube.svg" alt="YouTube"></a>
+    <a href="https://www.youtube.com/@CyberThreatDefense"><img height="25" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/youtube.svg" alt="YouTube"></a>
     &nbsp;
     <a href="https://cyberthreatdefence.com/my_awesome_lists"><img height="20" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/blog.svg" alt="My Awesome Lists"></a>
     <img src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/bar.gif">
@@ -80,11 +109,12 @@ python3 setup.py install
 You can access the my awesome lists [here](https://cyberthreatdefence.com/my_awesome_lists)
 
 ### Contributing
-
 [Contributions of any kind welcome, just follow the guidelines](contributing.md)!
 
 ### Contributors
-
 [Thanks goes to these contributors](https://github.com/cybersecurity-dev/ELF-Static-Toolkit/graphs/contributors)!
+
+### License
+[![CC0](http://mirrors.creativecommons.org/presskit/buttons/88x31/svg/cc-zero.svg)](http://creativecommons.org/publicdomain/zero/1.0)
 
 [🔼 Back to top](#elf-static-toolkit--executable-and-linkable-format-elf-analysing-toolkit)

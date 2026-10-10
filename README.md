@@ -1,7 +1,10 @@
 <div align="center">
     <p align="center">
         <a href="https://wiki.osdev.org/ELF">
-          <img width="60%" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/ELF_internals.jpg" />
+        <details>
+           <summary>ELF FILE MAP</summary>
+          <img width="100%" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/ELF_internals.jpg" />
+        </details>
         </a>
     </p>
 

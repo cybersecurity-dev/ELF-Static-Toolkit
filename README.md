@@ -1,5 +1,8 @@
 <div align="center">
     <p align="center">
+        <a href="https://github.com/cybersecurity-dev/awesome-elf-internals">
+          <img width="10%" src="https://github.com/cybersecurity-dev/cybersecurity-dev/blob/main/assets/Tux.svg" />
+        </a>
         <a href="https://wiki.osdev.org/ELF">
         <details>
            <summary>ELF FILE MAP</summary>

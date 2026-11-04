@@ -109,6 +109,18 @@ python3 setup.py install
 
 </details>
 
+## Extraction Framework
+
+| Extracted Feature | [readelf](https://sourceware.org/binutils/docs/binutils/readelf.html) | [objdump](https://sourceware.org/binutils/docs/binutils/objdump.html) | [nm](https://sourceware.org/binutils/docs/binutils/nm.html) | [GNU strings](https://sourceware.org/binutils/docs/binutils/strings.html) | [pyelftools](https://github.com/eliben/pyelftools) | [radare2](https://rada.re/n/) | [Ghidra](https://ghidra-sre.org/) | [angr](https://angr.io/) | [Joern](https://joern.io/) | [Regex](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| String Extraction | ⚠️ | ⚠️ | ❌ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Symbol Extraction | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
+| Import and Export Extraction | ✅ | ✅ | ⚠️ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
+| ELF Header Extraction | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ |
+| Section and Segment Extraction | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ |
+| Relocation Extraction | ✅ | ✅ | ⚠️ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ |
+| ELF Security Feature Extraction | ⚠️ | ⚠️ | ⚠️ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ |
+
 ##
 
 ### My Awesome Lists

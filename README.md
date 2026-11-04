@@ -121,6 +121,12 @@ python3 setup.py install
 | Relocation Extraction | ✅ | ✅ | ⚠️ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ |
 | ELF Security Feature Extraction | ⚠️ | ⚠️ | ⚠️ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ |
 
+> - ✅ Native or directly supported
+> - ⚠️ Partial support, intermediate representation, or custom scripting required
+> - ❌ Not directly supported
+
+
+
 ##
 
 ### My Awesome Lists
